@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+        <h1 class="h2">Dashboard</h1>
+        <div class="btn-toolbar mb-2 mb-md-0">
+            <a href="{{ url_for('new_bot') }}" class="btn btn-sm btn-outline-primary">
+                <i class="fa fa-plus"></i> New Bot
+            </a>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-12">
+            <h4>Your Bots</h4>
+            <div class="row">
+                {% for bot in bots %}
+                <div class="col-md-4 mb-4">
+                    <div class="card bot-card">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <h5 class="card-title mb-0">
+                                    <span class="status-indicator status-{{ bot.status }}"></span>
+                                    {{ bot.name }}
+                                </h5>
+                                <small class="text-muted">Created {{ bot.created_at.strftime('%Y-%m-%d') }}</small>
+                            </div>
+
+                            <div class="mb-3">
+                                <small class="text-muted">Symbols:</small>
+                                <div class="d-flex flex-wrap gap-1">
+                                    {% for symbol in bot.get_symbols() %}
+                                    <span class="badge bg-light text-dark">{{ symbol }}</span>
+                                    {% endfor %}
+                                </div>
+                            </div>
+
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div class="btn-group">
+                                    <a href="{{ url_for('bot_detail', bot_id=bot.id) }}" class="btn btn-sm btn-outline-secondary">
+                                        Details
+                                    </a>
+                                    {% if bot.status == 'stopped' %}
+                                    <button class="btn btn-sm btn-success start-bot" data-bot-id="{{ bot.id }}">
+                                        Start
+                                    </button>
+                                    {% else %}
+                                    <button class="btn btn-sm btn-danger stop-bot" data-bot-id="{{ bot.id }}">
+                                        Stop
+                                    </button>
+                                    {% endif %}
+                                </div>
+                                <small class="text-muted">Status: {{ bot.status }}</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% else %}
+                <div class="col-12">
+                    <div class="alert alert-info">
+                        You don't have any bots yet. <a href="{{ url_for('new_bot') }}">Create your first bot</a>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+$(document).ready(function() {
+    $('.start-bot').click(function() {
+        const botId = $(this).data('bot-id');
+        const button = $(this);
+
+        $.get(`/bot/${botId}/start`)
+            .done(function(response) {
+                location.reload();
+            })
+            .fail(function(xhr) {
+                alert(xhr.responseJSON.error || 'Failed to start bot');
+            });
+    });
+
+    $('.stop-bot').click(function() {
+        const botId = $(this).data('bot-id');
+        const button = $(this);
+
+        $.get(`/bot/${botId}/stop`)
+            .done(function(response) {
+                location.reload();
+            })
+            .fail(function(xhr) {
+                alert(xhr.responseJSON.error || 'Failed to stop bot');
+            });
+    });
+});
+</script>
+{% endblock %}

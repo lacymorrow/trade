@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container">
+    <div class="row align-items-center" style="min-height: 80vh;">
+        <div class="col-md-6">
+            <h1 class="display-4 mb-4">Welcome to Trading Bot Platform</h1>
+            <p class="lead mb-4">
+                Create, manage, and monitor your trading bots with ease. Our platform provides real-time market data,
+                sentiment analysis, and advanced trading strategies to help you make informed decisions.
+            </p>
+            <div class="d-grid gap-2 d-md-flex justify-content-md-start">
+                <a href="{{ url_for('register') }}" class="btn btn-primary btn-lg px-4 me-md-2">Get Started</a>
+                <a href="{{ url_for('login') }}" class="btn btn-outline-secondary btn-lg px-4">Sign In</a>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <img src="https://via.placeholder.com/600x400" alt="Trading Bot Platform" class="img-fluid rounded shadow">
+        </div>
+    </div>
+
+    <div class="row mt-5 py-5">
+        <div class="col-md-4">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h3 class="card-title">
+                        <i class="fa fa-robot text-primary"></i>
+                        Custom Bots
+                    </h3>
+                    <p class="card-text">
+                        Create and customize trading bots with your own strategies. Configure risk management,
+                        entry/exit points, and trading pairs.
+                    </p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h3 class="card-title">
+                        <i class="fa fa-chart-line text-success"></i>
+                        Real-time Analytics
+                    </h3>
+                    <p class="card-text">
+                        Monitor your bot's performance with real-time analytics. Track profits, losses,
+                        and trading history with detailed charts and reports.
+                    </p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h3 class="card-title">
+                        <i class="fa fa-shield text-warning"></i>
+                        Risk Management
+                    </h3>
+                    <p class="card-text">
+                        Built-in risk management features help protect your investments. Set stop-loss
+                        levels, position sizes, and maximum drawdown limits.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

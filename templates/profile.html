@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+        <h1 class="h2">Profile Settings</h1>
+    </div>
+
+    <div class="row">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Account Information</h5>
+                    <form method="POST">
+                        <div class="mb-3">
+                            <label class="form-label">Username</label>
+                            <input type="text" class="form-control" value="{{ current_user.username }}" disabled>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Email</label>
+                            <input type="email" class="form-control" value="{{ current_user.email }}" disabled>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">API Key</label>
+                            <input type="text" class="form-control" name="api_key"
+                                   value="{{ current_user.api_key or '' }}" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">API Secret</label>
+                            <input type="password" class="form-control" name="api_secret"
+                                   value="{{ current_user.api_secret or '' }}" required>
+                        </div>
+                        <div class="d-grid">
+                            <button type="submit" class="btn btn-primary">Save Changes</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Account Statistics</h5>
+                    <div class="mb-3">
+                        <strong>Total Bots:</strong>
+                        <span class="badge bg-primary">{{ current_user.bots|length }}</span>
+                    </div>
+                    <div class="mb-3">
+                        <strong>Active Bots:</strong>
+                        <span class="badge bg-success">
+                            {{ current_user.bots|selectattr('status', 'equalto', 'running')|list|length }}
+                        </span>
+                    </div>
+                    <div class="mb-3">
+                        <strong>Member Since:</strong>
+                        <span>{{ current_user.created_at.strftime('%Y-%m-%d') if current_user.created_at else 'N/A' }}</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card mt-4">
+                <div class="card-body">
+                    <h5 class="card-title">API Documentation</h5>
+                    <p class="card-text">
+                        To get your API credentials:
+                    </p>
+                    <ol>
+                        <li>Sign up for an Alpaca account at <a href="https://alpaca.markets" target="_blank">alpaca.markets</a></li>
+                        <li>Navigate to your Paper Trading Dashboard</li>
+                        <li>Find your API Key and Secret under API Credentials</li>
+                        <li>Copy and paste them into the form on the left</li>
+                    </ol>
+                    <div class="alert alert-info">
+                        <i class="fa fa-info-circle"></i>
+                        Your API credentials are required to execute trades. Make sure to use Paper Trading credentials
+                        while testing your bots.
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
