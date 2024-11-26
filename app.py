@@ -4,22 +4,24 @@ from flask_login import LoginManager, UserMixin, login_user, login_required, log
 from werkzeug.security import generate_password_hash, check_password_hash
 import os
 from datetime import datetime
-from trading.bot import TradingBot
-from trading.data_engine import DataEngine
-from trading.signal_engine import SignalEngine
-from trading.trade_engine import TradeEngine
 import threading
 import json
+from crypto.bot import CryptoBot
+from crypto.backtest_engine import BacktestEngine
+from crypto_config import TRADING_PAIRS, DEFAULT_TIMEFRAME
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.urandom(24)
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///trading_platform.db'
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///crypto_trading.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db = SQLAlchemy(app)
 login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = 'login'
+
+# Active bots storage
+active_bots = {}
 
 # Database Models
 class User(UserMixin, db.Model):
@@ -30,6 +32,7 @@ class User(UserMixin, db.Model):
     api_key = db.Column(db.String(128))
     api_secret = db.Column(db.String(128))
     bots = db.relationship('Bot', backref='user', lazy=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
@@ -43,7 +46,7 @@ class Bot(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     status = db.Column(db.String(20), default='stopped')  # running, stopped, error
     config = db.Column(db.Text)  # JSON string of bot configuration
-    symbols = db.Column(db.Text)  # JSON array of trading symbols
+    trading_pairs = db.Column(db.Text)  # JSON array of trading pairs
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     last_updated = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -53,11 +56,11 @@ class Bot(db.Model):
     def set_config(self, config_dict):
         self.config = json.dumps(config_dict)
 
-    def get_symbols(self):
-        return json.loads(self.symbols) if self.symbols else []
+    def get_trading_pairs(self):
+        return json.loads(self.trading_pairs) if self.trading_pairs else []
 
-    def set_symbols(self, symbols_list):
-        self.symbols = json.dumps(symbols_list)
+    def set_trading_pairs(self, pairs_list):
+        self.trading_pairs = json.dumps(pairs_list)
 
 class Trade(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -69,9 +72,6 @@ class Trade(db.Model):
     timestamp = db.Column(db.DateTime, default=datetime.utcnow)
     status = db.Column(db.String(10), nullable=False)  # open, closed, cancelled
     pnl = db.Column(db.Float)  # Profit/Loss when closed
-
-# Bot instance storage
-active_bots = {}
 
 @login_manager.user_loader
 def load_user(user_id):
@@ -94,17 +94,18 @@ def dashboard():
 def new_bot():
     if request.method == 'POST':
         name = request.form.get('name')
-        symbols = request.form.get('symbols', '').split(',')
+        trading_pairs = request.form.get('trading_pairs', '').split(',')
         config = {
-            'initial_capital': float(request.form.get('initial_capital', 10000)),
+            'timeframe': request.form.get('timeframe', DEFAULT_TIMEFRAME),
+            'initial_capital': float(request.form.get('initial_capital', 1000)),
             'risk_per_trade': float(request.form.get('risk_per_trade', 0.02)),
-            'take_profit': float(request.form.get('take_profit', 0.03)),
+            'take_profit': float(request.form.get('take_profit', 0.04)),
             'stop_loss': float(request.form.get('stop_loss', 0.02)),
             'max_positions': int(request.form.get('max_positions', 5)),
             'strategy_params': {
                 'trend_weight': float(request.form.get('trend_weight', 0.4)),
                 'momentum_weight': float(request.form.get('momentum_weight', 0.3)),
-                'sentiment_weight': float(request.form.get('sentiment_weight', 0.3)),
+                'volume_weight': float(request.form.get('volume_weight', 0.3))
             }
         }
 
@@ -114,7 +115,7 @@ def new_bot():
             status='stopped'
         )
         bot.set_config(config)
-        bot.set_symbols(symbols)
+        bot.set_trading_pairs(trading_pairs)
 
         db.session.add(bot)
         db.session.commit()
@@ -122,7 +123,7 @@ def new_bot():
         flash('Bot created successfully!', 'success')
         return redirect(url_for('dashboard'))
 
-    return render_template('new_bot.html')
+    return render_template('new_bot.html', trading_pairs=TRADING_PAIRS)
 
 @app.route('/bot/<int:bot_id>')
 @login_required
@@ -146,33 +147,20 @@ def start_bot(bot_id):
         return jsonify({'error': 'Bot is already running'}), 400
 
     try:
-        # Initialize bot components
-        data_engine = DataEngine()
-        signal_engine = SignalEngine(data_engine)
-        trade_engine = TradeEngine(
-            api_key=current_user.api_key,
-            api_secret=current_user.api_secret
-        )
-
-        # Create bot instance with user configuration
-        trading_bot = TradingBot(
-            config=bot.get_config(),
-            data_engine=data_engine,
-            signal_engine=signal_engine,
-            trade_engine=trade_engine
-        )
+        # Initialize bot components with user configuration
+        crypto_bot = CryptoBot(config=bot.get_config())
 
         # Start bot in a separate thread
         bot_thread = threading.Thread(
-            target=trading_bot.run,
-            args=(bot.get_symbols(),),
+            target=crypto_bot.run,
+            args=(bot.get_trading_pairs(),),
             daemon=True
         )
         bot_thread.start()
 
         # Store bot instance and thread
         active_bots[bot.id] = {
-            'bot': trading_bot,
+            'bot': crypto_bot,
             'thread': bot_thread
         }
 
@@ -212,6 +200,39 @@ def stop_bot(bot_id):
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+@app.route('/bot/<int:bot_id>/backtest', methods=['POST'])
+@login_required
+def run_backtest(bot_id):
+    bot = Bot.query.get_or_404(bot_id)
+    if bot.user_id != current_user.id:
+        return jsonify({'error': 'Access denied'}), 403
+
+    try:
+        start_date = datetime.strptime(request.form['start_date'], '%Y-%m-%d')
+        end_date = datetime.strptime(request.form['end_date'], '%Y-%m-%d')
+
+        # Initialize backtest engine
+        engine = BacktestEngine(initial_capital=bot.get_config().get('initial_capital', 1000))
+
+        results = {}
+        for symbol in bot.get_trading_pairs():
+            result = engine.run_backtest(
+                symbol=symbol,
+                timeframe=bot.get_config().get('timeframe', DEFAULT_TIMEFRAME),
+                start_date=start_date,
+                end_date=end_date
+            )
+            if result:
+                results[symbol] = result
+
+        return jsonify({
+            'message': 'Backtest completed successfully',
+            'results': results
+        })
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/bot/<int:bot_id>/update', methods=['POST'])
 @login_required
 def update_bot(bot_id):
@@ -226,6 +247,7 @@ def update_bot(bot_id):
         config = bot.get_config()
 
         # Update configuration
+        config['timeframe'] = request.form.get('timeframe', config['timeframe'])
         config['risk_per_trade'] = float(request.form.get('risk_per_trade', config['risk_per_trade']))
         config['take_profit'] = float(request.form.get('take_profit', config['take_profit']))
         config['stop_loss'] = float(request.form.get('stop_loss', config['stop_loss']))
@@ -234,38 +256,21 @@ def update_bot(bot_id):
         strategy_params = config.get('strategy_params', {})
         strategy_params['trend_weight'] = float(request.form.get('trend_weight', strategy_params.get('trend_weight', 0.4)))
         strategy_params['momentum_weight'] = float(request.form.get('momentum_weight', strategy_params.get('momentum_weight', 0.3)))
-        strategy_params['sentiment_weight'] = float(request.form.get('sentiment_weight', strategy_params.get('sentiment_weight', 0.3)))
+        strategy_params['volume_weight'] = float(request.form.get('volume_weight', strategy_params.get('volume_weight', 0.3)))
 
         config['strategy_params'] = strategy_params
         bot.set_config(config)
 
-        # Update symbols if provided
-        symbols = request.form.get('symbols')
-        if symbols:
-            bot.set_symbols(symbols.split(','))
+        # Update trading pairs if provided
+        trading_pairs = request.form.get('trading_pairs')
+        if trading_pairs:
+            bot.set_trading_pairs(trading_pairs.split(','))
 
         db.session.commit()
         return jsonify({'message': 'Bot updated successfully'})
 
     except Exception as e:
         return jsonify({'error': str(e)}), 500
-
-@app.route('/bot/<int:bot_id>/delete')
-@login_required
-def delete_bot(bot_id):
-    bot = Bot.query.get_or_404(bot_id)
-    if bot.user_id != current_user.id:
-        flash('Access denied', 'error')
-        return redirect(url_for('dashboard'))
-
-    if bot.status == 'running':
-        flash('Cannot delete running bot', 'error')
-        return redirect(url_for('dashboard'))
-
-    db.session.delete(bot)
-    db.session.commit()
-    flash('Bot deleted successfully', 'success')
-    return redirect(url_for('dashboard'))
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
