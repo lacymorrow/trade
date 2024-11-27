@@ -81,7 +81,7 @@ class SentimentAnalyzer:
             self.logger.error(f"Error scraping page {url}: {e}")
             return []
 
-    def get_sentiment_data(self, symbol, lookback_hours=2):
+    def get_sentiment_data(self, symbol, lookback_hours=1):
         """Get sentiment data from multiple sources"""
         end_time = datetime.now()
         start_time = end_time - timedelta(hours=lookback_hours)
@@ -93,12 +93,41 @@ class SentimentAnalyzer:
         # Combine and analyze posts
         all_posts = twitter_posts + stocktwits_posts
         if len(all_posts) < MIN_SOCIAL_POSTS:
+            # Use cached sentiment if available
+            cached_sentiment = self._get_cached_sentiment(symbol)
+            if cached_sentiment is not None:
+                return cached_sentiment
+
+            # If no posts but symbol is trending, assign base sentiment
+            if symbol in self.get_trending_stocks():
+                logger.info(f"Using base sentiment for trending symbol {symbol}")
+                return pd.Series([0.1], index=[end_time])  # Slight bullish bias for trending stocks
+
             logger.warning(f"Insufficient posts for {symbol}: {len(all_posts)} < {MIN_SOCIAL_POSTS}")
             return None
 
         # Create time series of sentiment
         sentiment_df = self._create_sentiment_timeseries(all_posts, start_time, end_time)
+        self._cache_sentiment(symbol, sentiment_df)
         return sentiment_df
+
+    def _get_cached_sentiment(self, symbol):
+        """Get cached sentiment data"""
+        # Implement simple in-memory cache
+        if hasattr(self, '_sentiment_cache'):
+            cache_entry = self._sentiment_cache.get(symbol)
+            if cache_entry and (datetime.now() - cache_entry['timestamp']).seconds < 300:  # 5 min cache
+                return cache_entry['data']
+        return None
+
+    def _cache_sentiment(self, symbol, sentiment_data):
+        """Cache sentiment data"""
+        if not hasattr(self, '_sentiment_cache'):
+            self._sentiment_cache = {}
+        self._sentiment_cache[symbol] = {
+            'data': sentiment_data,
+            'timestamp': datetime.now()
+        }
 
     def _get_twitter_posts(self, symbol, start_time, end_time):
         """Fetch Twitter posts"""
@@ -162,8 +191,25 @@ class SentimentAnalyzer:
     def _analyze_text_sentiment(self, text):
         """Analyze sentiment of text using TextBlob"""
         try:
+            # Clean text
+            text = re.sub(r'http\S+|www\S+|https\S+', '', text, flags=re.MULTILINE)
+            text = re.sub(r'\@\w+|\#\w+', '', text)
+
+            # Analyze sentiment
             analysis = TextBlob(text)
-            return analysis.sentiment.polarity
+
+            # Amplify sentiment based on keywords
+            score = analysis.sentiment.polarity
+
+            # Bullish keywords
+            if re.search(r'\b(buy|long|bullish|calls|moon|rocket|squeeze)\b', text.lower()):
+                score = min(1.0, score + 0.3)
+
+            # Bearish keywords
+            if re.search(r'\b(sell|short|bearish|puts|dump|crash)\b', text.lower()):
+                score = max(-1.0, score - 0.3)
+
+            return score
         except Exception as e:
             logger.error(f"Error analyzing sentiment: {e}")
             return 0
@@ -371,43 +417,99 @@ class SentimentAnalyzer:
         """
         Analyze social activity metrics for a symbol.
 
-        Calculates an activity score based on:
-        - Recent watcher additions
-        - Posting activity
-        - Sentiment changes
-
         Args:
             symbol (str): The stock symbol to analyze
 
         Returns:
             tuple: (bool, float) indicating if activity is high and activity score
         """
-        metrics = self.get_symbol_sentiment_metrics(symbol)
-        if not metrics:
+        # Get StockTwits metrics
+        st_metrics = self.get_symbol_sentiment_metrics(symbol)
+        if not st_metrics:
             return False, 0
 
-        # Calculate activity score
+        # Calculate activity score (now 100% weight on StockTwits)
         activity_score = 0
 
-        # Weight recent watcher additions
-        if metrics['watchers_change'] > 0:
-            activity_score += min(metrics['watchers_change'] / metrics['watchers'], 1) * 0.4
+        # Base activity (50% weight)
+        watchers = st_metrics.get('watchers', 0)
+        posts = st_metrics.get('posts', 0)
+        sentiment = st_metrics.get('sentiment', 0)
 
-        # Weight posting activity
-        if metrics['posts_change'] > 0:
-            activity_score += min(metrics['posts_change'] / metrics['posts'], 1) * 0.3
+        if watchers > 0:
+            activity_score += min(watchers / 500, 1) * 0.2  # Scaled by watchers (more lenient)
+        if posts > 0:
+            activity_score += min(posts / 25, 1) * 0.15  # Scaled by post count (more lenient)
+        if abs(sentiment) > 0:
+            activity_score += min(abs(sentiment), 1) * 0.15  # Scale by sentiment strength
 
-        # Weight sentiment change
-        if abs(metrics['sentiment_change']) > 0:
-            activity_score += min(abs(metrics['sentiment_change']), 1) * 0.3
+        # Recent activity changes (50% weight)
+        watchers_change = st_metrics.get('watchers_change', 0)
+        posts_change = st_metrics.get('posts_change', 0)
+        sentiment_change = st_metrics.get('sentiment_change', 0)
 
-        is_active = activity_score > 0.5
+        if watchers > 0 and watchers_change > 0:
+            activity_score += min(watchers_change / watchers, 1) * 0.2
+        if posts > 0 and posts_change > 0:
+            activity_score += min(posts_change / posts, 1) * 0.15
+        if abs(sentiment_change) > 0:
+            activity_score += min(abs(sentiment_change), 1) * 0.15
+
+        # Lower threshold and add logging
+        is_active = activity_score > 0.3  # Reduced from 0.5
 
         if is_active:
             self.logger.info(f"High social activity detected for {symbol}:")
-            self.logger.info(f"Watcher Change: {metrics['watchers_change']}")
-            self.logger.info(f"Post Change: {metrics['posts_change']}")
-            self.logger.info(f"Sentiment Change: {metrics['sentiment_change']:.2f}")
+            self.logger.info(f"Watchers: {watchers} (Change: {watchers_change})")
+            self.logger.info(f"Posts: {posts} (Change: {posts_change})")
+            self.logger.info(f"Sentiment: {sentiment:.2f} (Change: {sentiment_change:.2f})")
             self.logger.info(f"Activity Score: {activity_score:.2f}")
+        else:
+            self.logger.debug(f"Low social activity for {symbol} (Score: {activity_score:.2f})")
 
         return is_active, activity_score
+
+    def _get_twitter_metrics(self, symbol, lookback_hours=24):
+        """Get Twitter metrics for a symbol."""
+        try:
+            end_time = datetime.now()
+            start_time = end_time - timedelta(hours=lookback_hours)
+
+            # Get recent tweets
+            tweets = self._get_twitter_posts(symbol, start_time, end_time)
+            if not tweets:
+                return None
+
+            # Calculate metrics
+            tweet_count = len(tweets)
+
+            # Calculate engagement
+            total_engagement = sum(
+                tweet.get('likes', 0) + tweet.get('retweets', 0) * 2
+                for tweet in tweets
+            )
+
+            # Calculate sentiment
+            sentiments = [
+                self._analyze_text_sentiment(tweet['text'])
+                for tweet in tweets
+            ]
+            avg_sentiment = sum(sentiments) / len(sentiments) if sentiments else 0
+
+            # Calculate tweet velocity (change)
+            recent_tweets = [
+                t for t in tweets
+                if (end_time - t['timestamp']).total_seconds() <= 3600  # Last hour
+            ]
+            tweet_change = len(recent_tweets)
+
+            return {
+                'tweet_count': tweet_count,
+                'engagement': total_engagement,
+                'sentiment': avg_sentiment,
+                'tweet_change': tweet_change
+            }
+
+        except Exception as e:
+            self.logger.error(f"Error getting Twitter metrics: {e}")
+            return None

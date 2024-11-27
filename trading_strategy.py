@@ -4,6 +4,7 @@ from config import MAX_POSITION_SIZE, STOP_LOSS_PERCENTAGE, TAKE_PROFIT_PERCENTA
 import logging
 import alpaca_trade_api as tradeapi
 from datetime import datetime, timedelta
+import pandas as pd
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -151,3 +152,93 @@ class TradingStrategy:
         except Exception as e:
             logger.error(f"Error in backtest: {str(e)}")
             return None
+
+    def analyze_technical_indicators(self, symbol, price_data):
+        """Analyze technical indicators for a symbol"""
+        try:
+            df = pd.DataFrame(price_data)
+
+            # Calculate RSI
+            delta = df['close'].diff()
+            gain = (delta.where(delta > 0, 0)).rolling(window=RSI_PERIOD).mean()
+            loss = (-delta.where(delta < 0, 0)).rolling(window=RSI_PERIOD).mean()
+            rs = gain / loss
+            rsi = 100 - (100 / (1 + rs))
+
+            # Calculate VWAP
+            typical_price = (df['high'] + df['low'] + df['close']) / 3
+            vwap = (typical_price * df['volume']).cumsum() / df['volume'].cumsum()
+
+            # Calculate Bollinger Bands
+            sma = df['close'].rolling(window=BB_PERIOD).mean()
+            std = df['close'].rolling(window=BB_PERIOD).std()
+            upper_band = sma + (std * BB_STD)
+            lower_band = sma - (std * BB_STD)
+
+            # Get latest values
+            current_price = df['close'].iloc[-1]
+            current_rsi = rsi.iloc[-1]
+            current_vwap = vwap.iloc[-1]
+            current_upper = upper_band.iloc[-1]
+            current_lower = lower_band.iloc[-1]
+
+            # Score the setup
+            score = 0
+
+            # RSI signals
+            if current_rsi <= RSI_OVERSOLD:
+                score += 0.3  # Oversold
+            elif current_rsi >= RSI_OVERBOUGHT:
+                score -= 0.3  # Overbought
+
+            # VWAP signals
+            if current_price > current_vwap:
+                score += 0.2  # Above VWAP
+            else:
+                score -= 0.2  # Below VWAP
+
+            # Bollinger Band signals
+            if current_price <= current_lower:
+                score += 0.3  # At/below lower band
+            elif current_price >= current_upper:
+                score -= 0.3  # At/above upper band
+
+            # Volume confirmation
+            recent_volume = df['volume'].tail(5).mean()
+            if recent_volume > df['volume'].mean() * 1.5:
+                score *= 1.2  # Amplify signal on high volume
+
+            return score
+
+        except Exception as e:
+            logger.error(f"Error calculating technical indicators: {e}")
+            return 0
+
+    def should_enter_trade(self, symbol, price_data):
+        """Determine if we should enter a trade"""
+        try:
+            # Get sentiment score
+            sentiment_score = self.get_sentiment_score(symbol)
+
+            # Get technical score
+            technical_score = self.analyze_technical_indicators(symbol, price_data)
+
+            # Combine scores
+            if sentiment_score is None:
+                # Use only technical score if sentiment is unavailable
+                final_score = technical_score
+            else:
+                # Weight sentiment and technical analysis equally
+                final_score = (sentiment_score + technical_score) / 2
+
+            # Determine trade direction
+            if final_score >= 0.4:  # Bullish
+                return 'buy', abs(final_score)
+            elif final_score <= -0.4:  # Bearish
+                return 'sell', abs(final_score)
+
+            return None, 0
+
+        except Exception as e:
+            logger.error(f"Error in trade decision: {e}")
+            return None, 0

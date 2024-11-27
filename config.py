@@ -6,33 +6,33 @@ load_dotenv()
 
 # Trading parameters
 TRADING_CAPITAL = 10000              # Initial capital
-MAX_POSITION_SIZE = 0.1              # Max 10% per position
-MAX_PORTFOLIO_EXPOSURE = 0.3         # Max 30% total exposure
+MAX_POSITION_SIZE = 0.25             # Max 25% per position (increased from 20%)
+MAX_PORTFOLIO_EXPOSURE = 0.6         # Max 60% total exposure (increased from 50%)
 
 # Sentiment Analysis Parameters
-SENTIMENT_CORRELATION_THRESHOLD = 0.7 # Min correlation coefficient
-MIN_SOCIAL_POSTS = 20                # Minimum posts for valid sentiment
-SENTIMENT_WINDOW = "2h"              # Sentiment analysis timeframe
-SENTIMENT_LOOKBACK_PERIODS = 12      # Number of periods to calculate correlation
+SENTIMENT_CORRELATION_THRESHOLD = 0.3 # Min correlation coefficient (reduced from 0.5)
+MIN_SOCIAL_POSTS = 5                 # Minimum posts for valid sentiment (reduced from 10)
+SENTIMENT_WINDOW = "30m"             # Sentiment analysis timeframe (reduced from 1h)
+SENTIMENT_LOOKBACK_PERIODS = 4       # Number of periods to calculate correlation (reduced from 6)
 
 # Movement Analysis
-MIN_PRICE_MOVEMENT = 0.03            # 3% minimum price movement
-MAX_PRICE_MOVEMENT = 0.15            # 15% maximum price movement
-VOLUME_MULTIPLIER_THRESHOLD = 2.0    # Minimum volume increase
-PRICE_WINDOW = "2h"                  # Price analysis timeframe
+MIN_PRICE_MOVEMENT = 0.015           # 1.5% minimum price movement (reduced from 2%)
+MAX_PRICE_MOVEMENT = 3.00            # 300% maximum price movement
+VOLUME_MULTIPLIER_THRESHOLD = 1.1    # Minimum volume increase (reduced from 1.2)
+PRICE_WINDOW = "30m"                 # Price analysis timeframe (reduced from 1h)
 
 # Sanity Checks
-MAX_VOLATILITY = 0.4                 # Maximum allowed volatility
-MIN_MARKET_CAP = 1000000000         # $1B minimum market cap
-MIN_AVG_VOLUME = 500000             # Minimum average daily volume
-EARNINGS_BUFFER_DAYS = 5            # Days to avoid trading before earnings
-MAX_SPREAD_PCT = 0.02               # Maximum bid-ask spread as percentage
-MIN_SHARES_AVAILABLE = 100000       # Minimum shares available to short
+MAX_VOLATILITY = 0.8                 # Maximum allowed volatility (increased from 0.6)
+MIN_MARKET_CAP = 250000000          # $250M minimum market cap (reduced from 500M)
+MIN_AVG_VOLUME = 100000             # Minimum average daily volume (reduced from 250000)
+EARNINGS_BUFFER_DAYS = 3            # Days to avoid trading before earnings
+MAX_SPREAD_PCT = 0.03               # Maximum bid-ask spread as percentage
+MIN_SHARES_AVAILABLE = 50000        # Minimum shares available to short
 
 # Technical Indicators
 RSI_PERIOD = 14
-RSI_OVERSOLD = 30
-RSI_OVERBOUGHT = 70
+RSI_OVERSOLD = 35
+RSI_OVERBOUGHT = 65
 VWAP_WINDOW = "1d"
 BB_PERIOD = 20
 BB_STD = 2

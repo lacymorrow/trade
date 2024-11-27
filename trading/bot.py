@@ -185,7 +185,7 @@ class TradingBot:
             is_significant = (
                 abs(price_change) >= MIN_PRICE_MOVEMENT and
                 abs(price_change) <= MAX_PRICE_MOVEMENT and
-                volume_multiplier >= VOLUME_MULTIPLIER_THRESHOLD
+                (volume_multiplier >= VOLUME_MULTIPLIER_THRESHOLD or abs(price_change) >= MIN_PRICE_MOVEMENT * 2)
             )
 
             return is_significant, price_change
