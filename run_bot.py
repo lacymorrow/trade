@@ -17,6 +17,7 @@ def main():
     # Parse command line arguments
     parser = argparse.ArgumentParser(description='Run the trading bot')
     parser.add_argument('--test', action='store_true', help='Run in test mode (no real trades)')
+    parser.add_argument('--single-run', action='store_true', help='Run a single analysis cycle and exit')
     args = parser.parse_args()
 
     try:
@@ -27,7 +28,11 @@ def main():
         else:
             logging.info("Starting bot in LIVE MODE - Real trades will be executed")
 
-        bot.start()
+        if args.single_run:
+            logging.info("Running single analysis cycle...")
+            bot.analyze_all_symbols()
+        else:
+            bot.start()
     except KeyboardInterrupt:
         logging.info("Bot stopped by user")
     except Exception as e:

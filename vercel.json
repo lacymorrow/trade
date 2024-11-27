@@ -1,0 +1,26 @@
+{
+  "crons": [
+    {
+      "path": "/api/trading",
+      "schedule": "*/30 9-16 * * 1-5"
+    }
+  ],
+  "functions": {
+    "src/app/api/trading/route.ts": {
+      "memory": 1024,
+      "maxDuration": 300
+    }
+  },
+  "env": {
+    "ALPACA_API_KEY": "@alpaca_api_key",
+    "ALPACA_SECRET_KEY": "@alpaca_secret_key",
+    "ALPACA_BASE_URL": "@alpaca_base_url",
+    "TWITTER_API_KEY": "@twitter_api_key",
+    "TWITTER_API_SECRET": "@twitter_api_secret",
+    "TWITTER_ACCESS_TOKEN": "@twitter_access_token",
+    "TWITTER_ACCESS_TOKEN_SECRET": "@twitter_access_token_secret",
+    "STOCKTWITS_ACCESS_TOKEN": "@stocktwits_access_token",
+    "ALPHA_VANTAGE_API_KEY": "@alpha_vantage_api_key",
+    "CRON_SECRET": "@cron_secret"
+  }
+}

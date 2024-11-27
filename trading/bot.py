@@ -496,3 +496,28 @@ class TradingBot:
             except Exception as e:
                 self.logger.error(f"Error in main loop: {e}")
                 time.sleep(60)  # Wait before retrying
+
+    def analyze_all_symbols(self):
+        """Run a single analysis cycle over all symbols."""
+        try:
+            # Update symbol list
+            self.update_symbols()
+
+            # Check if market is open
+            is_open = self._is_market_open()
+            if not is_open and not self.test_mode:
+                self.logger.info("Market is closed. Skipping analysis.")
+                return
+
+            if not is_open:
+                self.logger.info("Market is closed but running analysis in test mode...")
+
+            # Analyze each symbol
+            self.logger.info(f"Analyzing {len(self.symbols)} symbols...")
+            for symbol in self.symbols:
+                self.analyze_symbol(symbol)
+
+            self.logger.info("Analysis cycle complete.")
+
+        except Exception as e:
+            self.logger.error(f"Error in analysis cycle: {e}")

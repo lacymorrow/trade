@@ -1,4 +1,13 @@
-import { Box, Table, Tbody, Td, Text, Th, Thead, Tr } from "@chakra-ui/react";
+import { Card } from "@/components/ui/card";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { cn } from "@/lib/utils";
 import { useEffect, useState } from "react";
 
 interface Trade {
@@ -43,45 +52,52 @@ export default function RecentTrades() {
   }, []);
 
   return (
-    <Box p={6} borderRadius="lg" bg="white" shadow="base" overflowX="auto">
-      <Table variant="simple">
-        <Thead>
-          <Tr>
-            <Th>Time</Th>
-            <Th>Symbol</Th>
-            <Th>Type</Th>
-            <Th isNumeric>Price</Th>
-            <Th isNumeric>Quantity</Th>
-            <Th isNumeric>Total</Th>
-          </Tr>
-        </Thead>
-        <Tbody>
+    <Card className="p-6 overflow-x-auto">
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Time</TableHead>
+            <TableHead>Symbol</TableHead>
+            <TableHead>Type</TableHead>
+            <TableHead className="text-right">Price</TableHead>
+            <TableHead className="text-right">Quantity</TableHead>
+            <TableHead className="text-right">Total</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
           {trades.map((trade) => (
-            <Tr key={trade.id}>
-              <Td>{trade.timestamp}</Td>
-              <Td>{trade.symbol}</Td>
-              <Td>
-                <Text color={trade.type === "buy" ? "green.500" : "red.500"}>
+            <TableRow key={trade.id}>
+              <TableCell>{trade.timestamp}</TableCell>
+              <TableCell>{trade.symbol}</TableCell>
+              <TableCell>
+                <span
+                  className={cn(
+                    "font-medium",
+                    trade.type === "buy" ? "text-green-600" : "text-red-600"
+                  )}
+                >
                   {trade.type.toUpperCase()}
-                </Text>
-              </Td>
-              <Td isNumeric>
+                </span>
+              </TableCell>
+              <TableCell className="text-right">
                 $
                 {trade.price.toLocaleString(undefined, {
                   maximumFractionDigits: 2,
                 })}
-              </Td>
-              <Td isNumeric>{trade.quantity.toFixed(8)}</Td>
-              <Td isNumeric>
+              </TableCell>
+              <TableCell className="text-right">
+                {trade.quantity.toFixed(8)}
+              </TableCell>
+              <TableCell className="text-right">
                 $
                 {trade.total.toLocaleString(undefined, {
                   maximumFractionDigits: 2,
                 })}
-              </Td>
-            </Tr>
+              </TableCell>
+            </TableRow>
           ))}
-        </Tbody>
+        </TableBody>
       </Table>
-    </Box>
+    </Card>
   );
 }

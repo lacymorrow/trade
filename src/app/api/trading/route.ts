@@ -7,16 +7,16 @@ const CRON_SECRET = process.env.CRON_SECRET;
 export async function POST(req: Request) {
     try {
         // Verify cron job secret
-        const headersList = headers();
-        const authorization = headersList.get('authorization');
+        const headersList = await headers();
+        const authorization = await headersList.get('authorization');
 
         if (!authorization || authorization !== `Bearer ${CRON_SECRET}`) {
             return new NextResponse('Unauthorized', { status: 401 });
         }
 
-        // Run the trading bot
+        // Run the trading bot with a single analysis flag
         const result = await new Promise((resolve, reject) => {
-            const bot = spawn('python3', ['run_bot.py']);
+            const bot = spawn('python3', ['run_bot.py', '--single-run']);
 
             let output = '';
             let error = '';
@@ -29,7 +29,14 @@ export async function POST(req: Request) {
                 error += data.toString();
             });
 
+            // Set a timeout of 2 minutes
+            const timeout = setTimeout(() => {
+                bot.kill();
+                reject(new Error('Bot execution timed out'));
+            }, 120000);
+
             bot.on('close', (code) => {
+                clearTimeout(timeout);
                 if (code !== 0) {
                     reject(new Error(`Bot exited with code ${code}\nError: ${error}`));
                 } else {
@@ -44,11 +51,11 @@ export async function POST(req: Request) {
             output: result
         });
 
-    } catch (error) {
+    } catch (error: unknown) {
         console.error('Error running trading bot:', error);
         return NextResponse.json({
             success: false,
-            error: error.message
+            error: error instanceof Error ? error.message : 'An unknown error occurred'
         }, { status: 500 });
     }
 }
