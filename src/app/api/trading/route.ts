@@ -3,14 +3,24 @@ import { headers } from 'next/headers';
 import { NextResponse } from 'next/server';
 
 const CRON_SECRET = process.env.CRON_SECRET;
+const UI_SECRET = process.env.UI_SECRET || 'development-secret';
 
 export async function POST(req: Request) {
     try {
-        // Verify cron job secret
+        // Get authorization header
         const headersList = await headers();
         const authorization = await headersList.get('authorization');
 
-        if (!authorization || authorization !== `Bearer ${CRON_SECRET}`) {
+        // Check if it's a cron job or UI request
+        if (!authorization) {
+            return new NextResponse('Unauthorized', { status: 401 });
+        }
+
+        // Handle both cron job and UI authentication
+        const isValidCron = authorization === `Bearer ${CRON_SECRET}`;
+        const isValidUI = authorization === `Bearer ${UI_SECRET}`;
+
+        if (!isValidCron && !isValidUI) {
             return new NextResponse('Unauthorized', { status: 401 });
         }
 
