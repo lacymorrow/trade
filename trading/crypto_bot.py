@@ -43,16 +43,18 @@ class CryptoBot:
         logger (logging.Logger): Logger for bot activities
     """
 
-    def __init__(self, test_mode=False, symbols=None):
+    def __init__(self, test_mode=True, symbols=None, force_trade=False):
         """
         Initialize the crypto trading bot.
 
         Args:
             test_mode (bool): Whether to run in test mode (no real trades)
             symbols (list): Optional list of specific symbols to trade
+            force_trade (bool): Whether to force a trade decision
         """
-        self.logger = logging.getLogger(__name__)
         self.test_mode = test_mode
+        self.force_trade = force_trade
+        self.logger = logging.getLogger(__name__)
         self.running = False
 
         # Initialize APIs and components
@@ -227,76 +229,275 @@ class CryptoBot:
 
     def analyze_trading_opportunity(self, symbol, price_data):
         """
-        Analyze a crypto pair for trading opportunities.
-
-        Performs comprehensive analysis including:
-        - Price movement analysis
-        - Social sentiment analysis
-        - Volume analysis
-        - Technical indicators
+        Analyze if there's a trading opportunity for the given symbol.
 
         Args:
             symbol (str): The crypto symbol to analyze
-            price_data (pd.DataFrame): OHLCV data for the symbol
+            price_data (pd.DataFrame): Historical price data
 
         Returns:
-            tuple: (bool, dict) indicating if opportunity exists and trade details
+            tuple: (should_trade, trade_type, reason)
+        """
+        if price_data is None or len(price_data) < 2:
+            return False, None, "Insufficient price data"
+
+        current_price = price_data['close'].iloc[-1]
+        prev_price = price_data['close'].iloc[-2]
+        price_change = (current_price - prev_price) / prev_price
+
+        self.logger.info(f"{symbol}: Current price: ${current_price:.2f}")
+
+        # Get current position
+        try:
+            position = self.trading_api.get_position(symbol.replace('/', ''))
+            has_position = True
+            position_size = float(position.qty)
+            position_value = float(position.market_value)
+        except Exception:
+            has_position = False
+            position_size = 0
+            position_value = 0
+
+        if not self.force_trade:
+            # Normal trading logic
+            if abs(price_change) < CRYPTO_CONFIG['MIN_PRICE_MOVEMENT']:
+                return False, None, f"No significant movement (Change: {price_change:.2%})"
+
+            if price_change > 0 and not has_position:
+                return True, "buy", f"Price up {price_change:.2%}"
+            elif price_change < 0 and has_position:
+                return True, "sell", f"Price down {price_change:.2%}"
+
+            return False, None, "No trading opportunity"
+        else:
+            # Forced trade logic - make a decision based on technical analysis
+            self.logger.info(f"{symbol}: Force trade mode - Analyzing best trade option")
+
+            # Calculate technical indicators
+            closes = price_data['close']
+            volumes = price_data['volume']
+
+            # Calculate RSI
+            rsi = self.calculate_rsi(closes)
+
+            # Calculate MACD
+            exp1 = closes.ewm(span=CRYPTO_CONFIG['MACD_FAST'], adjust=False).mean()
+            exp2 = closes.ewm(span=CRYPTO_CONFIG['MACD_SLOW'], adjust=False).mean()
+            macd = exp1 - exp2
+            signal = macd.ewm(span=CRYPTO_CONFIG['MACD_SIGNAL'], adjust=False).mean()
+
+            # Calculate SMAs
+            sma_short = closes.rolling(window=CRYPTO_CONFIG['SMA_SHORT_PERIOD']).mean().iloc[-1]
+            sma_long = closes.rolling(window=CRYPTO_CONFIG['SMA_LONG_PERIOD']).mean().iloc[-1]
+
+            # Calculate volume trend
+            avg_volume = volumes.mean()
+            current_volume = volumes.iloc[-1]
+            volume_ratio = current_volume / avg_volume
+
+            # Log technical analysis
+            self.logger.info(f"{symbol}: Technical Analysis:")
+            self.logger.info(f"- Price Change: {price_change:.2%}")
+            self.logger.info(f"- RSI: {rsi:.2f}")
+            self.logger.info(f"- MACD: {macd.iloc[-1]:.2f}")
+            self.logger.info(f"- Signal: {signal.iloc[-1]:.2f}")
+
+            # Score different factors
+            trend_score = 1 if sma_short > sma_long else -1
+            momentum_score = 1 if rsi > 50 else -1
+            macd_score = 1 if macd.iloc[-1] > signal.iloc[-1] else -1
+            volume_score = 1 if volume_ratio > 1 else -1
+
+            # Calculate weighted score
+            total_score = (
+                trend_score * CRYPTO_CONFIG['WEIGHT_TREND'] +
+                momentum_score * CRYPTO_CONFIG['WEIGHT_MOMENTUM'] +
+                macd_score * CRYPTO_CONFIG['WEIGHT_MOMENTUM'] +
+                volume_score * CRYPTO_CONFIG['WEIGHT_VOLUME']
+            )
+
+            self.logger.info(f"- Trend Score: {trend_score:.2f}")
+            self.logger.info(f"- Volume Score: {volume_score:.2f}")
+            self.logger.info(f"{symbol}: Total Analysis Score: {abs(total_score):.2f}")
+
+            # Make trading decision
+            if has_position:
+                # We have a position - decide whether to hold or sell
+                if total_score < -0.2:  # Threshold for selling
+                    return True, "sell", f"Bearish signals (Score: {total_score:.2f})"
+                else:
+                    return False, None, f"Holding position (Score: {total_score:.2f})"
+            else:
+                # We don't have a position - decide whether to buy
+                if total_score > 0.2:  # Threshold for buying
+                    return True, "buy", f"Bullish signals (Score: {total_score:.2f})"
+                else:
+                    return False, None, f"No clear buy signal (Score: {total_score:.2f})"
+
+    def calculate_technical_indicators(self, price_data):
+        """Calculate technical indicators for analysis."""
+        try:
+            # RSI
+            rsi = self.calculate_rsi(price_data['close'])
+
+            # Moving Averages
+            sma_short = price_data['close'].rolling(window=CRYPTO_CONFIG['SMA_SHORT_PERIOD']).mean()
+            sma_long = price_data['close'].rolling(window=CRYPTO_CONFIG['SMA_LONG_PERIOD']).mean()
+
+            # MACD
+            ema_fast = price_data['close'].ewm(span=CRYPTO_CONFIG['MACD_FAST']).mean()
+            ema_slow = price_data['close'].ewm(span=CRYPTO_CONFIG['MACD_SLOW']).mean()
+            macd = ema_fast - ema_slow
+            macd_signal = macd.ewm(span=CRYPTO_CONFIG['MACD_SIGNAL']).mean()
+
+            # Volume analysis
+            volume_sma = price_data['volume'].rolling(window=CRYPTO_CONFIG['SMA_SHORT_PERIOD']).mean()
+            current_volume = price_data['volume'].iloc[-1]
+            volume_ratio = current_volume / volume_sma.iloc[-1]
+
+            # Volatility
+            returns = price_data['close'].pct_change()
+            volatility = returns.std()
+
+            # Calculate scores
+            trend_score = 1 if sma_short.iloc[-1] > sma_long.iloc[-1] else -1
+            momentum_score = (
+                (1 if rsi > 50 else -1) * 0.5 +
+                (1 if macd.iloc[-1] > macd_signal.iloc[-1] else -1) * 0.5
+            )
+            volume_score = min(1, volume_ratio / CRYPTO_CONFIG['VOLUME_MULTIPLIER'])
+            volatility_score = min(1, volatility * 100)  # Normalize volatility
+
+            return {
+                'rsi': rsi,
+                'macd': macd.iloc[-1],
+                'macd_signal': macd_signal.iloc[-1],
+                'trend_score': trend_score,
+                'momentum_score': momentum_score,
+                'volume_score': volume_score,
+                'volatility_score': volatility_score
+            }
+
+        except Exception as e:
+            self.logger.error(f"Error calculating indicators: {str(e)}")
+            return {
+                'rsi': 50,
+                'macd': 0,
+                'macd_signal': 0,
+                'trend_score': 0,
+                'momentum_score': 0,
+                'volume_score': 0,
+                'volatility_score': 0
+            }
+
+    def calculate_rsi(self, prices, periods=14):
+        """Calculate RSI technical indicator."""
+        try:
+            deltas = np.diff(prices)
+            seed = deltas[:periods+1]
+            up = seed[seed >= 0].sum()/periods
+            down = -seed[seed < 0].sum()/periods
+            if down == 0:  # Handle division by zero
+                rs = 100
+            else:
+                rs = up/down
+            rsi = np.zeros_like(prices)
+            rsi[:periods] = 100. - 100./(1. + rs)
+
+            for i in range(periods, len(prices)):
+                delta = deltas[i - 1]
+                if delta > 0:
+                    upval = delta
+                    downval = 0.
+                else:
+                    upval = 0.
+                    downval = -delta
+
+                up = (up*(periods - 1) + upval)/periods
+                down = (down*(periods - 1) + downval)/periods
+                if down == 0:  # Handle division by zero
+                    rs = 100
+                else:
+                    rs = up/down
+                rsi[i] = 100. - 100./(1. + rs)
+
+            return rsi[-1]  # Return the last RSI value
+
+        except Exception as e:
+            self.logger.error(f"Error calculating RSI: {str(e)}")
+            return 50  # Return neutral RSI on error
+
+    def execute_trade(self, symbol, trade_type, price_data):
+        """
+        Execute a trade for the given symbol.
+
+        Args:
+            symbol (str): The crypto symbol to trade
+            trade_type (str): Type of trade ('buy' or 'sell')
+            price_data (pd.DataFrame): Historical price data
+
+        Returns:
+            bool: Whether the trade was successful
         """
         try:
             current_price = price_data['close'].iloc[-1]
-            self.logger.info(f"{symbol}: Current price: ${current_price:.2f}")
+            api_symbol = symbol.replace('/', '')
 
-            # Check for significant price movement
-            is_significant, price_change = self.analyze_price_movement(price_data)
-            if not is_significant:
-                self.logger.info(f"{symbol}: ❌ No significant movement (Change: {price_change:.2%})")
-                return False, None
+            # Calculate position size
+            account = self.trading_api.get_account()
+            buying_power = float(account.buying_power)
+            position_size = min(
+                buying_power * CRYPTO_CONFIG['MAX_POSITION_SIZE'],
+                CRYPTO_CONFIG['MAX_TRADE_VALUE']
+            )
 
-            self.logger.info(f"{symbol}: ✓ Significant movement detected (Change: {price_change:.2%})")
+            if trade_type == "buy":
+                qty = position_size / current_price
+                qty = round(qty, 8)  # Round to 8 decimal places for crypto
 
-            # Check social activity
-            self.logger.info(f"{symbol}: Checking social activity...")
-            base_symbol = symbol.replace('USD', '')  # Remove USD suffix for sentiment analysis
-            is_active, activity_score = self.sentiment_analyzer.analyze_social_activity(base_symbol)
-            if not is_active:
-                self.logger.info(f"{symbol}: ❌ Low social activity (Score: {activity_score:.2f})")
-                return False, None
+                if self.test_mode:
+                    self.logger.info(f"TEST MODE - Would submit order: Buy {qty} {symbol} @ ${current_price:.2f}")
+                    return True
 
-            self.logger.info(f"{symbol}: ✓ High social activity detected (Score: {activity_score:.2f})")
+                # Submit market buy order
+                self.trading_api.submit_order(
+                    symbol=api_symbol,
+                    qty=qty,
+                    side='buy',
+                    type='market',
+                    time_in_force='gtc'
+                )
+                self.logger.info(f"✅ Submitted buy order for {qty} {symbol} @ ${current_price:.2f}")
 
-            # Check for sentiment correlation
-            self.logger.info(f"{symbol}: Analyzing sentiment correlation...")
-            is_overreaction, correlation = self.sentiment_analyzer.detect_overreaction(base_symbol, price_data)
-            if not is_overreaction:
-                self.logger.info(f"{symbol}: ❌ No sentiment overreaction (Correlation: {correlation:.2f})")
-                return False, None
+            elif trade_type == "sell":
+                try:
+                    position = self.trading_api.get_position(api_symbol)
+                    qty = float(position.qty)
 
-            self.logger.info(f"{symbol}: ✓ Sentiment overreaction detected!")
-            self.logger.info(f"  - Correlation: {correlation:.2f}")
+                    if self.test_mode:
+                        self.logger.info(f"TEST MODE - Would submit order: Sell {qty} {symbol} @ ${current_price:.2f}")
+                        return True
 
-            # Trading opportunity found!
-            self.logger.info(f"\n🎯 TRADING OPPORTUNITY FOUND FOR {symbol}")
-            self.logger.info(f"Summary:")
-            self.logger.info(f"- Price: ${current_price:.2f}")
-            self.logger.info(f"- Price Change: {price_change:.2%}")
-            self.logger.info(f"- Social Activity Score: {activity_score:.2f}")
-            self.logger.info(f"- Sentiment Correlation: {correlation:.2f}")
+                    # Submit market sell order
+                    self.trading_api.submit_order(
+                        symbol=api_symbol,
+                        qty=qty,
+                        side='sell',
+                        type='market',
+                        time_in_force='gtc'
+                    )
+                    self.logger.info(f"✅ Submitted sell order for {qty} {symbol} @ ${current_price:.2f}")
 
-            # Prepare trading signal
-            signal = {
-                'symbol': symbol,
-                'price_change': price_change,
-                'activity_score': activity_score,
-                'correlation': correlation,
-                'side': 'sell' if correlation > 0 else 'buy'
-            }
+                except Exception as e:
+                    self.logger.error(f"No position found for {symbol}: {str(e)}")
+                    return False
 
-            self.logger.info(f"Recommended Action: {signal['side'].upper()}")
-            return True, signal
+            return True
 
         except Exception as e:
-            self.logger.error(f"Error analyzing {symbol}: {e}")
-            return False, None
+            self.logger.error(f"Failed to execute {trade_type} trade for {symbol}: {str(e)}")
+            self.logger.exception("Detailed error information:")
+            return False
 
     def analyze_symbol(self, symbol):
         """
@@ -312,67 +513,23 @@ class CryptoBot:
                 return
 
             # Analyze for trading opportunities
-            has_opportunity, signal = self.analyze_trading_opportunity(symbol, price_data)
+            should_trade, trade_type, reason = self.analyze_trading_opportunity(symbol, price_data)
 
-            if has_opportunity and not self.test_mode:
-                self.execute_trade(signal)
-            elif has_opportunity and self.test_mode:
-                self.logger.info(f"TEST MODE: Would execute {signal['side']} trade for {symbol}")
+            if should_trade:
+                self.logger.info(f"{symbol}: Trade opportunity found - {reason}")
+                if self.test_mode:
+                    self.logger.info(f"TEST MODE: Would execute {trade_type} trade for {symbol}")
+                else:
+                    success = self.execute_trade(symbol, trade_type, price_data)
+                    if success:
+                        self.logger.info(f"{symbol}: Successfully executed {trade_type} trade")
+                    else:
+                        self.logger.error(f"{symbol}: Failed to execute {trade_type} trade")
+            else:
+                self.logger.info(f"{symbol}: No trade opportunity - {reason}")
 
         except Exception as e:
             self.logger.error(f"Error analyzing {symbol}: {e}")
-
-    def execute_trade(self, signal):
-        """
-        Execute a crypto trade based on the signal.
-
-        Args:
-            signal (dict): Trading signal with trade details
-        """
-        try:
-            symbol = signal['symbol']
-            side = signal['side']
-
-            # Get current price
-            quote = self.trading_api.get_latest_crypto_quote(symbol)
-            price = float(quote.ask_price if side == 'buy' else quote.bid_price)
-
-            # Calculate position size
-            max_position = min(
-                TRADING_CAPITAL * MAX_POSITION_SIZE,
-                TRADING_CAPITAL * MAX_PORTFOLIO_EXPOSURE
-            )
-
-            # Ensure minimum trade size
-            if max_position < CRYPTO_CONFIG['MIN_TRADE_SIZE']:
-                self.logger.warning(f"Position size {max_position:.2f} below minimum {CRYPTO_CONFIG['MIN_TRADE_SIZE']}")
-                return
-
-            # Check spread
-            spread = (quote.ask_price - quote.bid_price) / quote.ask_price
-            if spread > CRYPTO_CONFIG['MAX_SPREAD_PCT']:
-                self.logger.warning(f"Spread {spread:.2%} too high (max {CRYPTO_CONFIG['MAX_SPREAD_PCT']:.2%})")
-                return
-
-            # For crypto, we use notional value instead of shares
-            qty = max_position / price
-
-            # Place the order
-            self.trading_api.submit_order(
-                symbol=symbol,
-                qty=qty,
-                side=side,
-                type='market',
-                time_in_force='gtc'
-            )
-
-            self.logger.info(f"Executed {side.upper()} order for {symbol}")
-            self.logger.info(f"Quantity: {qty:.8f}")
-            self.logger.info(f"Price: ${price:.2f}")
-            self.logger.info(f"Total Value: ${qty * price:.2f}")
-
-        except Exception as e:
-            self.logger.error(f"Error executing trade: {e}")
 
     def start(self):
         """

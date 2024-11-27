@@ -17,14 +17,16 @@ def main():
     # Parse command line arguments
     parser = argparse.ArgumentParser(description='Run the crypto trading bot')
     parser.add_argument('--test', action='store_true', help='Run in test mode (no real trades)')
-    parser.add_argument('--symbols', nargs='+', help='Specific crypto symbols to trade (e.g., BTC USD ETH)')
+    parser.add_argument('--symbols', nargs='+', help='Specific crypto symbols to trade (e.g., BTC ETH)')
+    parser.add_argument('--force-trade', action='store_true', help='Force the bot to make a trade decision')
     args = parser.parse_args()
 
     try:
         # Initialize and start the bot
         bot = CryptoBot(
             test_mode=args.test,
-            symbols=args.symbols
+            symbols=args.symbols,
+            force_trade=args.force_trade
         )
 
         if args.test:
@@ -36,6 +38,9 @@ def main():
             logging.info(f"Trading specific symbols: {', '.join(args.symbols)}")
         else:
             logging.info("Trading all available crypto pairs")
+
+        if args.force_trade:
+            logging.info("Force trade mode enabled - Bot will make trade decisions")
 
         bot.start()
     except KeyboardInterrupt:

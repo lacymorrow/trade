@@ -66,5 +66,23 @@ CRYPTO_CONFIG = {
     'MIN_PRICE_MOVEMENT': 0.05,  # 5% for crypto (more volatile)
     'VOLUME_MULTIPLIER': 3.0,    # Higher volume threshold for crypto
     'MAX_SPREAD_PCT': 0.03,      # Allow higher spreads for crypto
-    'MIN_TRADE_SIZE': 10.0       # Minimum trade size in USD
+    'MIN_TRADE_SIZE': 10.0,      # Minimum trade size in USD
+    'MAX_POSITION_SIZE': 0.2,    # Maximum 20% of buying power per position
+    'MAX_TRADE_VALUE': 10000.0,  # Maximum $10,000 per trade
+
+    # Technical Analysis Parameters for Forced Trades
+    'RSI_PERIOD': 14,
+    'RSI_OVERSOLD': 30,
+    'RSI_OVERBOUGHT': 70,
+    'SMA_SHORT_PERIOD': 5,
+    'SMA_LONG_PERIOD': 20,
+    'MACD_FAST': 12,
+    'MACD_SLOW': 26,
+    'MACD_SIGNAL': 9,
+
+    # Scoring Weights for Forced Trades
+    'WEIGHT_TREND': 0.3,      # Weight for trend following signals
+    'WEIGHT_MOMENTUM': 0.3,   # Weight for momentum indicators
+    'WEIGHT_VOLUME': 0.2,     # Weight for volume analysis
+    'WEIGHT_VOLATILITY': 0.2  # Weight for volatility measures
 }
