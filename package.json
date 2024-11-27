@@ -1,32 +1,28 @@
 {
-  "name": "crypto-bot-dashboard",
+  "name": "trading-bot",
   "version": "0.1.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "pip install -r requirements.txt && next build",
     "start": "next start",
     "lint": "next lint"
   },
   "dependencies": {
-    "next": "14.0.4",
-    "react": "^18",
-    "react-dom": "^18",
-    "@chakra-ui/react": "^2.8.2",
-    "@emotion/react": "^11",
-    "@emotion/styled": "^11",
-    "framer-motion": "^10",
-    "swr": "^2.2.4",
-    "chart.js": "^4.4.1",
-    "react-chartjs-2": "^5.2.0",
-    "date-fns": "^2.30.0"
-  },
-  "devDependencies": {
-    "@types/node": "^20",
-    "@types/react": "^18",
-    "@types/react-dom": "^18",
-    "typescript": "^5",
-    "eslint": "^8",
-    "eslint-config-next": "14.0.4"
+    "@types/node": "20.10.1",
+    "@types/react": "18.2.39",
+    "@types/react-dom": "18.2.17",
+    "autoprefixer": "^10.4.20",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "lucide-react": "^0.462.0",
+    "next": "^15.0.3",
+    "postcss": "^8.4.49",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "tailwind-merge": "^2.5.5",
+    "tailwindcss": "^3.4.15",
+    "tailwindcss-animate": "^1.0.7",
+    "typescript": "5.3.2"
   }
 }
