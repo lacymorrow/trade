@@ -1,0 +1,8 @@
+# Run the crypto bot every day at midnight
+0 0 * * * cd /path/to/your/project && python3 run_crypto_bot.py --config bot_config.json >> /var/log/crypto_bot.log 2>&1
+
+# Restart the bot if it crashes (check every 5 minutes)
+*/5 * * * * if ! pgrep -f "python3 run_crypto_bot.py" > /dev/null; then cd /path/to/your/project && python3 run_crypto_bot.py --config bot_config.json >> /var/log/crypto_bot.log 2>&1; fi
+
+# Clean up old log files weekly
+0 0 * * 0 find /var/log -name "crypto_bot.log.*" -mtime +7 -exec rm {} \;
