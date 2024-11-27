@@ -1,51 +1,37 @@
-import os
 import logging
+import sys
+import argparse
 from trading.bot import TradingBot
-from dotenv import load_dotenv
-
-# Load environment variables
-load_dotenv()
 
 # Configure logging
 logging.basicConfig(
-    level=logging.INFO,
+    level=logging.DEBUG,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
         logging.FileHandler('trading_bot.log'),
-        logging.StreamHandler()
+        logging.StreamHandler(sys.stdout)
     ]
 )
 
-logger = logging.getLogger(__name__)
-
 def main():
+    # Parse command line arguments
+    parser = argparse.ArgumentParser(description='Run the trading bot')
+    parser.add_argument('--test', action='store_true', help='Run in test mode (no real trades)')
+    args = parser.parse_args()
+
     try:
-        # Verify API credentials
-        required_env_vars = [
-            'ALPACA_API_KEY',
-            'ALPACA_SECRET_KEY',
-            'ALPACA_BASE_URL',
-            'TWITTER_API_KEY',
-            'TWITTER_API_SECRET',
-            'TWITTER_ACCESS_TOKEN',
-            'TWITTER_ACCESS_TOKEN_SECRET',
-            'ALPHA_VANTAGE_API_KEY'
-        ]
+        # Initialize and start the bot
+        bot = TradingBot(test_mode=args.test)
+        if args.test:
+            logging.info("Starting bot in TEST MODE - No real trades will be executed")
+        else:
+            logging.info("Starting bot in LIVE MODE - Real trades will be executed")
 
-        missing_vars = [var for var in required_env_vars if not os.getenv(var)]
-        if missing_vars:
-            logger.error(f"Missing required environment variables: {missing_vars}")
-            return
-
-        # Create and run the trading bot
-        bot = TradingBot()
-        logger.info("Starting trading bot...")
-        bot.run()
-
+        bot.start()
     except KeyboardInterrupt:
-        logger.info("Shutting down trading bot...")
+        logging.info("Bot stopped by user")
     except Exception as e:
-        logger.error(f"Error running trading bot: {str(e)}")
+        logging.error(f"Bot stopped due to error: {e}", exc_info=True)
 
 if __name__ == "__main__":
     main()

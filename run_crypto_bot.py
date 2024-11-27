@@ -1,30 +1,47 @@
 import logging
-from crypto.bot import CryptoBot
-from crypto_config import TRADING_PAIRS, DEFAULT_TIMEFRAME
+import sys
+import argparse
+from trading.crypto_bot import CryptoBot
 
+# Configure logging
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler('crypto_bot.log'),
+        logging.StreamHandler(sys.stdout)
+    ]
 )
-logger = logging.getLogger(__name__)
 
 def main():
-    """Main function to run the crypto trading bot."""
+    # Parse command line arguments
+    parser = argparse.ArgumentParser(description='Run the crypto trading bot')
+    parser.add_argument('--test', action='store_true', help='Run in test mode (no real trades)')
+    parser.add_argument('--symbols', nargs='+', help='Specific crypto symbols to trade (e.g., BTC USD ETH)')
+    args = parser.parse_args()
+
     try:
-        # Configure the bot
-        config = {
-            'trading_pairs': TRADING_PAIRS,
-            'timeframe': DEFAULT_TIMEFRAME
-        }
+        # Initialize and start the bot
+        bot = CryptoBot(
+            test_mode=args.test,
+            symbols=args.symbols
+        )
 
-        # Initialize and run the bot
-        bot = CryptoBot(config)
-        bot.run()
+        if args.test:
+            logging.info("Starting crypto bot in TEST MODE - No real trades will be executed")
+        else:
+            logging.info("Starting crypto bot in LIVE MODE - Real trades will be executed")
 
+        if args.symbols:
+            logging.info(f"Trading specific symbols: {', '.join(args.symbols)}")
+        else:
+            logging.info("Trading all available crypto pairs")
+
+        bot.start()
     except KeyboardInterrupt:
-        logger.info("Shutting down...")
+        logging.info("Bot stopped by user")
     except Exception as e:
-        logger.error(f"Error in main: {str(e)}")
+        logging.error(f"Bot stopped due to error: {e}", exc_info=True)
 
 if __name__ == "__main__":
     main()

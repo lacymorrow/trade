@@ -5,21 +5,46 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Trading parameters
-TRADING_CAPITAL = 10000  # Initial capital for backtesting
-MAX_POSITION_SIZE = 0.1  # Maximum position size as a fraction of portfolio
-STOP_LOSS_PERCENTAGE = 0.05  # 5% stop loss
-TAKE_PROFIT_PERCENTAGE = 0.1  # 10% take profit
+TRADING_CAPITAL = 10000              # Initial capital
+MAX_POSITION_SIZE = 0.1              # Max 10% per position
+MAX_PORTFOLIO_EXPOSURE = 0.3         # Max 30% total exposure
 
-# Sentiment Analysis parameters
-SENTIMENT_THRESHOLD = 0.2  # Minimum sentiment score to trigger a trade
-MIN_TWEETS = 10  # Minimum number of tweets needed for valid sentiment
-PRICE_DROP_THRESHOLD = -0.05  # -5% price drop threshold
+# Sentiment Analysis Parameters
+SENTIMENT_CORRELATION_THRESHOLD = 0.7 # Min correlation coefficient
+MIN_SOCIAL_POSTS = 20                # Minimum posts for valid sentiment
+SENTIMENT_WINDOW = "2h"              # Sentiment analysis timeframe
+SENTIMENT_LOOKBACK_PERIODS = 12      # Number of periods to calculate correlation
+
+# Movement Analysis
+MIN_PRICE_MOVEMENT = 0.03            # 3% minimum price movement
+MAX_PRICE_MOVEMENT = 0.15            # 15% maximum price movement
+VOLUME_MULTIPLIER_THRESHOLD = 2.0    # Minimum volume increase
+PRICE_WINDOW = "2h"                  # Price analysis timeframe
+
+# Sanity Checks
+MAX_VOLATILITY = 0.4                 # Maximum allowed volatility
+MIN_MARKET_CAP = 1000000000         # $1B minimum market cap
+MIN_AVG_VOLUME = 500000             # Minimum average daily volume
+EARNINGS_BUFFER_DAYS = 5            # Days to avoid trading before earnings
+MAX_SPREAD_PCT = 0.02               # Maximum bid-ask spread as percentage
+MIN_SHARES_AVAILABLE = 100000       # Minimum shares available to short
+
+# Technical Indicators
+RSI_PERIOD = 14
+RSI_OVERSOLD = 30
+RSI_OVERBOUGHT = 70
+VWAP_WINDOW = "1d"
+BB_PERIOD = 20
+BB_STD = 2
 
 # API Credentials
 ALPACA_CONFIG = {
     'API_KEY': os.getenv('ALPACA_API_KEY'),
     'SECRET_KEY': os.getenv('ALPACA_SECRET_KEY'),
-    'BASE_URL': os.getenv('ALPACA_BASE_URL')
+    'BASE_URL': os.getenv('ALPACA_BASE_URL'),
+    'DATA_URL': 'https://data.sandbox.alpaca.markets',
+    'CRYPTO_URL': 'https://data.sandbox.alpaca.markets/v2/crypto',
+    'DATA_FEED': 'iex'  # Use IEX for free data
 }
 
 TWITTER_CONFIG = {
@@ -34,3 +59,12 @@ STOCKTWITS_CONFIG = {
 }
 
 ALPHA_VANTAGE_API_KEY = os.getenv('ALPHA_VANTAGE_API_KEY')
+
+# Crypto-specific parameters
+CRYPTO_CONFIG = {
+    'DEFAULT_PAIRS': ['BTCUSD', 'ETHUSD', 'SOLUSD', 'AVAXUSD', 'MATICUSD'],
+    'MIN_PRICE_MOVEMENT': 0.05,  # 5% for crypto (more volatile)
+    'VOLUME_MULTIPLIER': 3.0,    # Higher volume threshold for crypto
+    'MAX_SPREAD_PCT': 0.03,      # Allow higher spreads for crypto
+    'MIN_TRADE_SIZE': 10.0       # Minimum trade size in USD
+}
