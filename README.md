@@ -1,187 +1,165 @@
-# Crypto Trading Bot
+# Trading Bot
 
-A sophisticated cryptocurrency trading bot that uses technical analysis and market indicators to make automated trading decisions. The bot operates 24/7 on the Alpaca trading platform, analyzing multiple crypto pairs and executing trades based on configurable strategies.
+A full-stack trading bot that combines technical analysis, sentiment analysis, and automated trading execution for both traditional stocks and cryptocurrencies.
 
 ## Features
 
-- **24/7 Market Monitoring**: Continuously analyzes cryptocurrency markets
-- **Multi-Currency Support**: Trades multiple crypto pairs (BTC, ETH, SOL, AVAX, MATIC)
-- **Technical Analysis**: Uses multiple indicators:
-  - RSI (Relative Strength Index)
-  - MACD (Moving Average Convergence Divergence)
-  - Moving Averages (Short and Long term)
-  - Volume Analysis
-  - Price Volatility
+- 🤖 Automated trading for stocks and cryptocurrencies
+- 📊 Real-time market data analysis
+- 🔍 Social media sentiment analysis
+- 📈 Technical indicator calculations
+- 🛡️ Built-in safety checks and risk management
+- 🎯 Position sizing and portfolio management
+- 🖥️ Modern web interface built with Next.js
+- 📱 Responsive design with Shadcn UI
+- 🚀 Deployed on Google Cloud Run
 
-- **Risk Management**:
-  - Position size limits
-  - Portfolio exposure controls
-  - Sanity checks on prices and volumes
+## Documentation
 
-- **Flexible Operation Modes**:
-  - Test Mode (paper trading)
-  - Live Trading Mode
-  - Force Trade Mode (for immediate trade decisions)
+- [Architecture Overview](docs/architecture.md)
+- [API Documentation](docs/api.md)
+- [Development Guide](docs/development.md)
+- [Deployment Guide](docs/deployment.md)
 
-## Installation
+## Quick Start
 
-1. Clone the repository:
+1. **Prerequisites**
+   - Python 3.8+
+   - Node.js 18+
+   - pnpm
+   - Google Cloud CLI (for deployment)
 
-```bash
-git clone [repository-url]
-cd trade
+2. **Installation**
+   ```bash
+   # Clone repository
+   git clone <repository-url>
+   cd trading-bot
+
+   # Install dependencies
+   python -m venv venv
+   source venv/bin/activate  # or `venv\Scripts\activate` on Windows
+   pip install -r requirements.txt
+
+   pnpm install
+   ```
+
+3. **Configuration**
+   ```bash
+   cp .env.example .env
+   # Edit .env with your API credentials
+   ```
+
+4. **Run Development Servers**
+   ```bash
+   # Start Next.js development server
+   pnpm dev
+
+   # In another terminal, run the trading bot
+   python run_bot.py --test
+   ```
+
+## Architecture
+
+```
+┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
+│   Frontend UI   │────▶│   Backend API   │────▶│   Trading Core  │
+└─────────────────┘     └─────────────────┘     └─────────────────┘
+        │                       │                        │
+        │                       │                        │
+        ▼                       ▼                        ▼
+┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
+│  User Controls  │     │  Data Analysis  │     │ Market Analysis │
+└─────────────────┘     └─────────────────┘     └─────────────────┘
 ```
 
-2. Install dependencies:
+## Project Structure
 
-```bash
-pip install -r requirements.txt
 ```
-
-3. Configure your Alpaca API credentials in `config.py`:
-
-```python
-ALPACA_CONFIG = {
-    'API_KEY': 'your-api-key',
-    'SECRET_KEY': 'your-secret-key',
-    'BASE_URL': 'https://api.alpaca.markets'
-}
-```
-
-## Usage
-
-### Basic Run
-
-```bash
-python3 run_crypto_bot.py
-```
-
-### Test Mode (No Real Trades)
-
-```bash
-python3 run_crypto_bot.py --test
-```
-
-### Force Trade Mode
-
-```bash
-python3 run_crypto_bot.py --force-trade
-```
-
-### Specific Symbols
-
-```bash
-python3 run_crypto_bot.py --symbols BTC ETH SOL
+project/
+├── src/                    # Frontend application
+│   ├── app/               # Next.js pages and API routes
+│   ├── components/        # React components
+│   ├── lib/              # Utility functions
+│   └── hooks/            # Custom React hooks
+├── trading/              # Trading core
+│   ├── core/            # Core trading components
+│   ├── bots/            # Bot implementations
+│   ├── analysis/        # Analysis engines
+│   └── utils/           # Utilities
+├── docs/                # Documentation
+├── tests/               # Test suites
+└── config/             # Configuration files
 ```
 
 ## Configuration
 
-Key parameters can be configured in `config.py`:
+The bot can be configured through:
+- Environment variables (`.env`)
+- Configuration files (`config/`)
+- Command-line arguments
+- Web interface
 
-- `TRADING_CAPITAL`: Maximum capital to deploy
-- `MAX_POSITION_SIZE`: Maximum size for any single position
-- `MAX_PORTFOLIO_EXPOSURE`: Maximum total portfolio exposure
-- `VOLUME_MULTIPLIER_THRESHOLD`: Volume surge detection threshold
-- `PRICE_WINDOW`: Time window for price analysis
-- `SENTIMENT_CORRELATION_THRESHOLD`: Threshold for sentiment correlation
+See the [Development Guide](docs/development.md) for detailed configuration options.
 
-## Trading Strategy
+## Development
 
-The bot uses a multi-factor analysis approach:
+See the [Development Guide](docs/development.md) for detailed instructions on:
+- Setting up the development environment
+- Adding new features
+- Testing
+- Debugging
+- Performance optimization
 
-1. **Technical Analysis**:
-   - RSI for overbought/oversold conditions
-   - MACD for trend direction and momentum
-   - Moving averages for trend confirmation
-   - Volume analysis for trade conviction
+## API
 
-2. **Decision Making**:
-   - Calculates a weighted score based on multiple indicators
-   - Buy signals when score > 0.2 (configurable)
-   - Sell signals when score < -0.2 (configurable)
+The bot provides a RESTful API and WebSocket endpoints for:
+- Bot control
+- Trading operations
+- Market analysis
+- Portfolio management
 
-3. **Position Sizing**:
-   - Based on available buying power
-   - Respects maximum position and portfolio limits
-   - Adjusts for crypto volatility
+See the [API Documentation](docs/api.md) for detailed endpoint specifications.
 
-## Logging
+## Deployment
 
-The bot maintains detailed logs in `crypto_bot.log`, including:
-
-- Trade decisions and executions
-- Technical analysis results
-- Error messages and warnings
-- Market data summaries
-
-## Safety Features
-
-1. **Test Mode**: Run without real trades
-2. **Sanity Checks**: Validates prices and volumes
-3. **Position Limits**: Prevents oversized positions
-4. **Error Handling**: Graceful handling of API issues
-
-## Dependencies
-
-- `alpaca-trade-api`: Alpaca Markets API client
-- `pandas`: Data analysis and manipulation
-- `numpy`: Numerical computations
-- `requests`: HTTP requests
+See the [Deployment Guide](docs/deployment.md) for instructions on:
+- Local deployment
+- Cloud deployment
+- Environment setup
+- Monitoring
+- Troubleshooting
 
 ## Contributing
 
 1. Fork the repository
 2. Create a feature branch
-3. Commit your changes
-4. Push to the branch
-5. Create a Pull Request
+3. Make your changes
+4. Add tests
+5. Submit a pull request
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed guidelines.
+
+## Security
+
+- Never commit API keys or secrets
+- Use environment variables for sensitive data
+- Follow security best practices
+- Keep dependencies updated
 
 ## License
 
-[Your License Here]
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-## Disclaimer
+## Support
 
-This bot is for educational purposes only. Cryptocurrency trading carries significant risks. Always test thoroughly in paper trading mode first.
+For support:
+1. Check the documentation
+2. Open an issue
+3. Contact the maintainers
 
----
+## Acknowledgments
 
-# Next.js
-
-
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
-
-## Getting Started
-
-First, run the development server:
-
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
-
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
-
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
-
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- [Alpaca Markets](https://alpaca.markets/) for trading API
+- [Next.js](https://nextjs.org/) for the frontend framework
+- [Shadcn UI](https://ui.shadcn.com/) for UI components
+- [Google Cloud](https://cloud.google.com/) for hosting

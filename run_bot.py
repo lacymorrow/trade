@@ -1,42 +1,64 @@
-import logging
-import sys
 import argparse
-from trading.bot import TradingBot
-
-# Configure logging
-logging.basicConfig(
-    level=logging.DEBUG,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler('trading_bot.log'),
-        logging.StreamHandler(sys.stdout)
-    ]
-)
+import json
+import os
+import sys
+from dotenv import load_dotenv
+from trading.bots.crypto_bot import CryptoBot
 
 def main():
-    # Parse command line arguments
+    # Load environment variables from .env file
+    load_dotenv()
+
     parser = argparse.ArgumentParser(description='Run the trading bot')
-    parser.add_argument('--test', action='store_true', help='Run in test mode (no real trades)')
-    parser.add_argument('--single-run', action='store_true', help='Run a single analysis cycle and exit')
+    parser.add_argument('--single-run', action='store_true', help='Run a single analysis')
+    parser.add_argument('--get-trades', action='store_true', help='Get recent trades')
     args = parser.parse_args()
 
-    try:
-        # Initialize and start the bot
-        bot = TradingBot(test_mode=args.test)
-        if args.test:
-            logging.info("Starting bot in TEST MODE - No real trades will be executed")
-        else:
-            logging.info("Starting bot in LIVE MODE - Real trades will be executed")
+    # Get API credentials from environment variables
+    api_key = os.getenv('ALPACA_API_KEY')
+    api_secret = os.getenv('ALPACA_SECRET_KEY')
+    base_url = os.getenv('ALPACA_BASE_URL')
 
-        if args.single_run:
-            logging.info("Running single analysis cycle...")
-            bot.analyze_all_symbols()
-        else:
-            bot.start()
-    except KeyboardInterrupt:
-        logging.info("Bot stopped by user")
-    except Exception as e:
-        logging.error(f"Bot stopped due to error: {e}", exc_info=True)
+    if not api_key or not api_secret:
+        print(json.dumps({
+            'error': 'Missing API credentials. Please set ALPACA_API_KEY and ALPACA_SECRET_KEY environment variables.'
+        }))
+        sys.exit(1)
 
-if __name__ == "__main__":
+    bot = CryptoBot(
+        api_key=api_key,
+        api_secret=api_secret,
+        base_url=base_url,
+        test_mode=True  # Always use test mode for safety
+    )
+
+    if args.get_trades:
+        # Get recent trades from all symbols
+        all_trades = []
+        for symbol in bot.get_trading_pairs():
+            trades = bot.data_engine.get_recent_trades(symbol, limit=10)
+            if trades is not None:
+                for _, trade in trades.iterrows():
+                    all_trades.append({
+                        'id': f"{trade['timestamp'].isoformat()}-{symbol}",
+                        'timestamp': trade['timestamp'].isoformat(),
+                        'symbol': symbol,
+                        'side': trade['side'],
+                        'price': float(trade['price']),
+                        'quantity': float(trade['size'])
+                    })
+
+        # Sort trades by timestamp, most recent first
+        all_trades.sort(key=lambda x: x['timestamp'], reverse=True)
+
+        # Print as JSON to stdout
+        print(json.dumps({'trades': all_trades}))
+        return
+
+    if args.single_run:
+        bot.run_single_analysis()
+    else:
+        bot.run()
+
+if __name__ == '__main__':
     main()

@@ -22,34 +22,55 @@ interface Trade {
 
 export default function RecentTrades() {
   const [trades, setTrades] = useState<Trade[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    // In a real implementation, this would fetch from your API
-    // For now, we'll generate sample data
-    const generateTrades = () => {
-      const symbols = ["BTC/USD", "ETH/USD", "SOL/USD"];
-      const newTrades: Trade[] = Array.from({ length: 5 }, (_, i) => ({
-        id: `trade-${Date.now()}-${i}`,
-        timestamp: new Date(Date.now() - i * 3600000).toLocaleString(),
-        symbol: symbols[Math.floor(Math.random() * symbols.length)],
-        type: Math.random() > 0.5 ? "buy" : "sell",
-        price: Math.random() * 50000,
-        quantity: Math.random() * 2,
-        total: 0,
-      }));
+    const fetchTrades = async () => {
+      try {
+        setIsLoading(true);
+        setError(null);
+        const response = await fetch("/api/bot/trades");
+        if (!response.ok) {
+          throw new Error("Failed to fetch trades");
+        }
+        const data = await response.json();
+        if (data.error) {
+          throw new Error(data.error);
+        }
 
-      // Calculate totals
-      newTrades.forEach((trade) => {
-        trade.total = trade.price * trade.quantity;
-      });
+        // Transform the data to match our interface
+        const formattedTrades: Trade[] = data.trades.map((trade: any) => ({
+          id: trade.id,
+          timestamp: new Date(trade.timestamp).toLocaleString(),
+          symbol: trade.symbol,
+          type: trade.side.toLowerCase(),
+          price: trade.price,
+          quantity: trade.quantity,
+          total: trade.price * trade.quantity,
+        }));
 
-      setTrades(newTrades);
+        setTrades(formattedTrades);
+      } catch (err) {
+        console.error("Error fetching trades:", err);
+        setError(err instanceof Error ? err.message : "Failed to fetch trades");
+      } finally {
+        setIsLoading(false);
+      }
     };
 
-    generateTrades();
-    const interval = setInterval(generateTrades, 60000); // Update every minute
+    fetchTrades();
+    const interval = setInterval(fetchTrades, 30000); // Update every 30 seconds
     return () => clearInterval(interval);
   }, []);
+
+  if (isLoading) {
+    return <div>Loading trades...</div>;
+  }
+
+  if (error) {
+    return <div className="text-red-500">Error: {error}</div>;
+  }
 
   return (
     <Card className="p-6 overflow-x-auto">
@@ -65,37 +86,45 @@ export default function RecentTrades() {
           </TableRow>
         </TableHeader>
         <TableBody>
-          {trades.map((trade) => (
-            <TableRow key={trade.id}>
-              <TableCell>{trade.timestamp}</TableCell>
-              <TableCell>{trade.symbol}</TableCell>
-              <TableCell>
-                <span
-                  className={cn(
-                    "font-medium",
-                    trade.type === "buy" ? "text-green-600" : "text-red-600"
-                  )}
-                >
-                  {trade.type.toUpperCase()}
-                </span>
-              </TableCell>
-              <TableCell className="text-right">
-                $
-                {trade.price.toLocaleString(undefined, {
-                  maximumFractionDigits: 2,
-                })}
-              </TableCell>
-              <TableCell className="text-right">
-                {trade.quantity.toFixed(8)}
-              </TableCell>
-              <TableCell className="text-right">
-                $
-                {trade.total.toLocaleString(undefined, {
-                  maximumFractionDigits: 2,
-                })}
+          {trades.length === 0 ? (
+            <TableRow>
+              <TableCell colSpan={6} className="text-center">
+                No trades found
               </TableCell>
             </TableRow>
-          ))}
+          ) : (
+            trades.map((trade) => (
+              <TableRow key={trade.id}>
+                <TableCell>{trade.timestamp}</TableCell>
+                <TableCell>{trade.symbol}</TableCell>
+                <TableCell>
+                  <span
+                    className={cn(
+                      "font-medium",
+                      trade.type === "buy" ? "text-green-600" : "text-red-600"
+                    )}
+                  >
+                    {trade.type.toUpperCase()}
+                  </span>
+                </TableCell>
+                <TableCell className="text-right">
+                  $
+                  {trade.price.toLocaleString(undefined, {
+                    maximumFractionDigits: 2,
+                  })}
+                </TableCell>
+                <TableCell className="text-right">
+                  {trade.quantity.toFixed(8)}
+                </TableCell>
+                <TableCell className="text-right">
+                  $
+                  {trade.total.toLocaleString(undefined, {
+                    maximumFractionDigits: 2,
+                  })}
+                </TableCell>
+              </TableRow>
+            ))
+          )}
         </TableBody>
       </Table>
     </Card>
