@@ -24,23 +24,35 @@ export default function RecentTrades() {
   const [trades, setTrades] = useState<Trade[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [warnings, setWarnings] = useState<string[]>([]);
 
   useEffect(() => {
     const fetchTrades = async () => {
       try {
         setIsLoading(true);
         setError(null);
+        setWarnings([]);
+
         const response = await fetch("/api/bot/trades");
         if (!response.ok) {
-          throw new Error("Failed to fetch trades");
+          throw new Error(`HTTP error! status: ${response.status}`);
         }
         const data = await response.json();
-        if (data.error) {
-          throw new Error(data.error);
+
+        // Check for error in response
+        if (!data.success) {
+          throw new Error(data.error?.message || "Failed to fetch trades");
+        }
+
+        // Store any warnings
+        if (data.warnings) {
+          setWarnings(
+            data.warnings.map((w: any) => `${w.symbol}: ${w.message}`)
+          );
         }
 
         // Transform the data to match our interface
-        const formattedTrades: Trade[] = data.trades.map((trade: any) => ({
+        const formattedTrades: Trade[] = data.data.trades.map((trade: any) => ({
           id: trade.id,
           timestamp: new Date(trade.timestamp).toLocaleString(),
           symbol: trade.symbol,
@@ -74,6 +86,15 @@ export default function RecentTrades() {
 
   return (
     <Card className="p-6 overflow-x-auto">
+      {warnings.length > 0 && (
+        <div className="mb-4">
+          {warnings.map((warning, index) => (
+            <div key={index} className="text-yellow-600 text-sm">
+              Warning: {warning}
+            </div>
+          ))}
+        </div>
+      )}
       <Table>
         <TableHeader>
           <TableRow>

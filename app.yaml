@@ -1,0 +1,13 @@
+runtime: custom
+env: flex
+
+resources:
+cpu: 1
+memory_gb: 2
+disk_size_gb: 10
+
+env_variables:
+NODE_ENV: "production"
+PORT: "8080"
+HOST: "0.0.0.0"
+NEXT_TELEMETRY_DISABLED: "1"

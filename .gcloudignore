@@ -1,0 +1,14 @@
+.git
+.gitignore
+node_modules/
+test/
+*.test.js
+.env
+.env.*
+__pycache__/
+*.pyc
+.pytest_cache/
+.coverage
+.venv/
+.next/cache/
+*.log
