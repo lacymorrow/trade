@@ -2,10 +2,10 @@
 
 ## Overview
 
-The trading bot can be deployed in multiple environments:
-1. Local deployment for development and testing
-2. Cloud deployment for production use
-3. Container deployment for scalability
+The trading system supports multiple bot types and deployment environments:
+1. Cryptocurrency trading bot (24/7 operation)
+2. Stock trading bot (market hours operation)
+3. Local, cloud, or container deployment
 
 ## Local Deployment
 
@@ -53,12 +53,20 @@ The trading bot can be deployed in multiple environments:
 
 1. **Test Mode**
    ```bash
-   python run_bot.py --single-run
+   # Crypto bot
+   python run_bot.py --bot-type crypto --single-run
+
+   # Stock bot
+   python run_bot.py --bot-type stock --single-run
    ```
 
 2. **Production Mode**
    ```bash
-   python run_bot.py
+   # Crypto bot (24/7)
+   python run_bot.py --bot-type crypto
+
+   # Stock bot (market hours)
+   python run_bot.py --bot-type stock
    ```
 
 ## Cloud Deployment
@@ -72,18 +80,36 @@ The trading bot can be deployed in multiple environments:
 
 2. **Build Container**
    ```bash
-   docker build -t gcr.io/$PROJECT_ID/trade-app .
+   # Build for crypto bot
+   docker build -t gcr.io/$PROJECT_ID/crypto-bot \
+     --build-arg BOT_TYPE=crypto .
+
+   # Build for stock bot
+   docker build -t gcr.io/$PROJECT_ID/stock-bot \
+     --build-arg BOT_TYPE=stock .
    ```
 
 3. **Push to Container Registry**
    ```bash
-   docker push gcr.io/$PROJECT_ID/trade-app
+   # Push crypto bot
+   docker push gcr.io/$PROJECT_ID/crypto-bot
+
+   # Push stock bot
+   docker push gcr.io/$PROJECT_ID/stock-bot
    ```
 
 4. **Deploy to Cloud Run**
    ```bash
-   gcloud run deploy trade-app \
-     --image gcr.io/$PROJECT_ID/trade-app \
+   # Deploy crypto bot
+   gcloud run deploy crypto-bot \
+     --image gcr.io/$PROJECT_ID/crypto-bot \
+     --platform managed \
+     --region us-central1 \
+     --allow-unauthenticated
+
+   # Deploy stock bot
+   gcloud run deploy stock-bot \
+     --image gcr.io/$PROJECT_ID/stock-bot \
      --platform managed \
      --region us-central1 \
      --allow-unauthenticated
@@ -96,6 +122,7 @@ The trading bot can be deployed in multiple environments:
    ALPACA_API_KEY=your_key
    ALPACA_SECRET_KEY=your_secret
    ALPACA_BASE_URL=https://paper-api.alpaca.markets
+   BOT_TYPE=crypto|stock
    ```
 
 2. **Optional Variables**
@@ -127,28 +154,49 @@ COPY . .
 # Set environment variables
 ENV PYTHONUNBUFFERED=1
 
+# Set bot type argument
+ARG BOT_TYPE=crypto
+ENV BOT_TYPE=$BOT_TYPE
+
 # Run the bot
-CMD ["python", "run_bot.py"]
+CMD ["python", "run_bot.py", "--bot-type", "${BOT_TYPE}"]
 ```
 
 ### Docker Commands
 
-1. **Build Image**
+1. **Build Images**
    ```bash
-   docker build -t trade-bot .
+   # Build crypto bot
+   docker build -t crypto-bot \
+     --build-arg BOT_TYPE=crypto .
+
+   # Build stock bot
+   docker build -t stock-bot \
+     --build-arg BOT_TYPE=stock .
    ```
 
-2. **Run Container**
+2. **Run Containers**
    ```bash
+   # Run crypto bot
    docker run -d \
-     --name trade-bot \
+     --name crypto-bot \
      --env-file .env \
-     trade-bot
+     crypto-bot
+
+   # Run stock bot
+   docker run -d \
+     --name stock-bot \
+     --env-file .env \
+     stock-bot
    ```
 
 3. **View Logs**
    ```bash
-   docker logs -f trade-bot
+   # Crypto bot logs
+   docker logs -f crypto-bot
+
+   # Stock bot logs
+   docker logs -f stock-bot
    ```
 
 ## Monitoring
@@ -179,6 +227,10 @@ CMD ["python", "run_bot.py"]
    - Trading status
    - Position monitoring
    - Performance metrics
+
+3. **Market Status**
+   - Crypto: 24/7 monitoring
+   - Stocks: Market hours check
 
 ## Security
 
@@ -250,14 +302,15 @@ CMD ["python", "run_bot.py"]
 
 1. **Bot Failure**
    ```bash
-   # Stop bot
-   docker stop trade-bot
+   # Stop bots
+   docker stop crypto-bot stock-bot
 
    # Check logs
-   docker logs trade-bot
+   docker logs crypto-bot
+   docker logs stock-bot
 
-   # Restart bot
-   docker start trade-bot
+   # Restart bots
+   docker start crypto-bot stock-bot
    ```
 
 2. **Data Issues**

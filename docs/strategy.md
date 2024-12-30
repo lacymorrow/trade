@@ -1,10 +1,10 @@
-# Trading Strategy
+# Trading Strategies
 
 ## Overview
 
-The trading bot implements a technical analysis-based strategy for cryptocurrency trading, focusing on momentum and volume indicators with risk-adjusted position sizing.
+The trading system implements technical analysis-based strategies for both cryptocurrency and stock trading, focusing on momentum and volume indicators with risk-adjusted position sizing.
 
-## Signal Generation
+## Common Components
 
 ### Technical Indicators
 
@@ -14,7 +14,7 @@ The trading bot implements a technical analysis-based strategy for cryptocurrenc
    - Interpretation:
      - RSI > 70: Overbought
      - RSI < 30: Oversold
-   - Weight in final signal: 30%
+   - Weight in final signal: 30-40%
 
 2. **MACD (Moving Average Convergence Divergence)**
    - Calculation:
@@ -24,16 +24,18 @@ The trading bot implements a technical analysis-based strategy for cryptocurrenc
    - Signal generation:
      - Buy: MACD crosses above signal line
      - Sell: MACD crosses below signal line
-   - Weight in final signal: 30%
+   - Weight in final signal: 30-40%
 
 3. **Volume Analysis**
    - Volume ratio: Current volume / 20-period average
    - Interpretation:
      - High volume confirms trend
      - Low volume suggests weak moves
-   - Weight in final signal: 40%
+   - Weight in final signal: 20-40%
 
-### Signal Strength Calculation
+## Cryptocurrency Trading (CryptoBot)
+
+### Signal Generation
 
 ```python
 strength = (
@@ -45,13 +47,11 @@ strength = (
 
 - Signal range: -1.0 to +1.0
 - Minimum threshold: ±0.6 for trade execution
-- Volatility adjustment reduces signal in high volatility
+- Higher volatility adjustment for crypto markets
 
-## Risk Management
+### Risk Management
 
-### Position Sizing
-
-1. **Account Risk**
+1. **Position Sizing**
    - Maximum risk per trade: 1% of account equity
    - Position size calculation:
      ```python
@@ -59,36 +59,89 @@ strength = (
      quantity = risk_amount / price
      ```
 
-2. **Order Validation**
-   - Minimum order size checks
-   - Available buying power verification
-   - Maximum position size limits
-
-### Volatility Adjustment
-
-1. **Volatility Factor**
-   ```python
-   volatility_factor = 1 - min(volatility * 2, 0.5)
-   ```
+2. **Volatility Adjustment**
    - Reduces position size in volatile markets
    - Maximum 50% reduction based on volatility
+   - More aggressive adjustment for crypto
 
-2. **Market Conditions**
-   - Higher thresholds in volatile markets
-   - Reduced position sizes in uncertain conditions
-   - Automatic trading pause in extreme conditions
+### Market Specific Features
+
+1. **24/7 Trading**
+   - Continuous market monitoring
+   - No market hours restrictions
+   - Real-time price updates
+
+2. **Asset Selection**
+   - Focuses on major cryptocurrencies
+   - Requires sufficient liquidity
+   - Must be supported by Alpaca
+
+## Stock Trading (StockBot)
+
+### Signal Generation
+
+```python
+strength = (
+    rsi_signal * 0.4 +      # RSI component
+    macd_signal * 0.4 +     # MACD component
+    volume_signal * 0.2     # Volume component
+)
+```
+
+- Signal range: -1.0 to +1.0
+- Minimum threshold: ±0.5 for trade execution
+- No volatility adjustment (more stable market)
+
+### Risk Management
+
+1. **Position Sizing**
+   - Maximum risk per trade: 1% of account equity
+   - Position size calculation:
+     ```python
+     risk_amount = account_value * 0.01  # 1% risk
+     quantity = risk_amount / price
+     ```
+
+2. **Market Hours**
+   - Only trades during market hours
+   - Checks market status before trading
+   - Respects trading halts
+
+### Market Specific Features
+
+1. **Asset Selection**
+   ```python
+   assets = api.list_assets(
+       status='active',
+       asset_class='us_equity'
+   )
+   symbols = [
+       asset.symbol
+       for asset in assets
+       if asset.tradable and asset.fractionable
+   ]
+   ```
+   - US equities only
+   - Must be actively trading
+   - Must support fractional shares
+
+2. **Trading Restrictions**
+   - Pattern day trading rules
+   - Market hours only
+   - Trading halts
 
 ## Trade Execution
 
 ### Entry Rules
 
 1. **Long (Buy) Signals**
-   - Signal strength > 0.6
+   - Signal strength above threshold
    - Sufficient buying power
    - Below maximum position size
+   - Market conditions suitable
 
 2. **Short (Sell) Signals**
-   - Signal strength < -0.6
+   - Signal strength below threshold
    - Existing position to close
    - Market conditions suitable
 
@@ -134,7 +187,7 @@ strength = (
    - Open orders
    - Trading history
 
-## Strategy Parameters
+## Configuration
 
 ### Default Settings
 
@@ -143,7 +196,10 @@ strength = (
     "timeframe": "1Min",        # Trading interval
     "window": 20,              # Analysis window
     "risk_percent": 0.01,      # Risk per trade
-    "signal_threshold": 0.6,   # Min signal strength
+    "signal_threshold": {
+        "crypto": 0.6,         # Crypto threshold
+        "stock": 0.5           # Stock threshold
+    },
     "rsi_period": 14,         # RSI calculation period
     "volume_window": 20,      # Volume average window
     "test_mode": True         # Paper trading enabled
@@ -152,9 +208,9 @@ strength = (
 
 ### Customization
 
-The strategy can be customized by adjusting:
+The strategies can be customized by adjusting:
 - Indicator parameters
 - Signal thresholds
 - Risk percentages
 - Timeframes
-- Trading pairs 
+- Trading pairs/symbols 

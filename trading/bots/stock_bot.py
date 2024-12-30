@@ -101,6 +101,23 @@ class StockDataEngine(DataEngine):
         except Exception:
             return False
 
+    def get_recent_trades(
+        self,
+        symbol: str,
+        limit: int = 50
+    ) -> Optional[pd.DataFrame]:
+        """Get recent trades from Alpaca."""
+        try:
+            self._rate_limit_wait()
+            trades = self.api.get_trades(
+                symbol,
+                limit=limit
+            ).df
+            return trades
+        except Exception as e:
+            self.logger.error(f"Error fetching trades for {symbol}: {str(e)}")
+            return None
+
 class StockSignalEngine(SignalEngine):
     """Stock market signal generation implementation."""
 
@@ -249,19 +266,27 @@ class StockTradeEngine(TradeEngine):
                 self.logger.error(f"Error getting position: {str(e)}")
             return None
 
-    def get_account_balance(self) -> Optional[Dict[str, Any]]:
+    def get_account_balance(self) -> Optional[Dict[str, float]]:
         """Get account balance from Alpaca."""
         try:
             account = self.api.get_account()
             return {
                 "equity": float(account.equity),
                 "cash": float(account.cash),
-                "buying_power": float(account.buying_power),
-                "day_trades": int(account.daytrade_count)
+                "buying_power": float(account.buying_power)
             }
         except Exception as e:
             self.logger.error(f"Error getting account balance: {str(e)}")
             return None
+
+    def cancel_order(self, order_id: str) -> bool:
+        """Cancel an open order."""
+        try:
+            self.api.cancel_order(order_id)
+            return True
+        except Exception as e:
+            self.logger.error(f"Error canceling order: {str(e)}")
+            return False
 
     def get_market_price(self, symbol: str) -> Optional[float]:
         """Get current market price from Alpaca."""
@@ -271,15 +296,6 @@ class StockTradeEngine(TradeEngine):
         except Exception as e:
             self.logger.error(f"Error getting market price: {str(e)}")
             return None
-
-    def cancel_order(self, order_id: str) -> bool:
-        """Cancel order on Alpaca."""
-        try:
-            self.api.cancel_order(order_id)
-            return True
-        except Exception as e:
-            self.logger.error(f"Error canceling order: {str(e)}")
-            return False
 
 class StockBot(BaseBot):
     """Stock trading bot implementation."""
@@ -291,30 +307,63 @@ class StockBot(BaseBot):
         base_url: str,
         test_mode: bool = True
     ):
-        """Initialize stock trading bot."""
-        super().__init__(test_mode)
+        """Initialize the stock trading bot."""
+        super().__init__()
+        self.logger = logging.getLogger(self.__class__.__name__)
+        self.test_mode = test_mode
 
         # Initialize Alpaca API
         self.api = tradeapi.REST(
             api_key,
             api_secret,
             base_url,
-            api_version="v2"
+            api_version='v2'
         )
 
-        # Initialize components
+        # Initialize engines
         self.data_engine = StockDataEngine(self.api)
         self.signal_engine = StockSignalEngine(self.data_engine)
         self.trade_engine = StockTradeEngine(self.api, test_mode)
 
-    def _initialize(self) -> bool:
-        """Initialize bot components."""
+        # Initialize trading parameters
+        self.symbols = []
+        self.update_symbols()
+
+    def update_symbols(self) -> None:
+        """Update list of tradeable symbols."""
         try:
+            assets = self.api.list_assets(
+                status='active',
+                asset_class='us_equity'
+            )
+            self.symbols = [
+                asset.symbol
+                for asset in assets
+                if asset.tradable and asset.fractionable
+            ]
+            self.logger.info(f"Updated symbols: {len(self.symbols)} available")
+        except Exception as e:
+            self.logger.error(f"Error updating symbols: {str(e)}")
+
+    def get_trading_pairs(self) -> List[str]:
+        """Get list of trading pairs."""
+        return self.symbols
+
+    def _initialize(self) -> bool:
+        """Initialize the bot."""
+        try:
+            self.logger.info("Starting trading bot...")
+
             # Check API connection
             self.api.get_account()
 
-            # Update trading symbols
+            # Update available symbols
             self.update_symbols()
+
+            # Verify we have symbols to trade
+            if not self.symbols:
+                self.logger.error("No tradeable symbols found")
+                return False
 
             return True
 
@@ -323,11 +372,11 @@ class StockBot(BaseBot):
             return False
 
     def _can_trade(self) -> bool:
-        """Check if trading is currently possible."""
+        """Check if trading is possible."""
         try:
-            # Check market hours
+            # Check if market is open
             clock = self.api.get_clock()
-            if not clock.is_open and not self.test_mode:
+            if not clock.is_open:
                 self.logger.info("Market is closed")
                 return False
 
@@ -337,65 +386,83 @@ class StockBot(BaseBot):
                 self.logger.error("Account is blocked from trading")
                 return False
 
+            # Check buying power
+            if float(account.buying_power) <= 0:
+                self.logger.warning("No buying power available")
+                return False
+
             return True
 
         except Exception as e:
-            self.logger.error(f"Error checking trade status: {str(e)}")
+            self.logger.error(f"Error checking trade conditions: {str(e)}")
             return False
 
-    def update_symbols(self) -> None:
-        """Update list of tradeable symbols."""
-        try:
-            assets = self.api.list_assets(status="active")
-            self.symbols = [
-                asset.symbol for asset in assets
-                if asset.tradable and asset.marginable
-            ]
-            self.logger.info(f"Updated symbols: {len(self.symbols)} available")
-
-        except Exception as e:
-            self.logger.error(f"Error updating symbols: {str(e)}")
-
     def analyze_symbols(self) -> None:
-        """Analyze symbols for trading opportunities."""
-        for symbol in self.symbols:
-            try:
+        """Analyze symbols and generate signals."""
+        try:
+            for symbol in self.symbols:
                 # Get price data
                 price_data = self.data_engine.get_price_data(symbol)
                 if price_data is None:
                     continue
 
-                # Generate trading signal
+                # Generate signal
                 signal = self.signal_engine.generate_signal(symbol, price_data)
                 if signal is None:
                     continue
 
-                # Execute trade if signal is strong enough
-                if abs(signal["strength"]) >= 0.8:  # High conviction threshold
-                    price = signal["price"]
-                    quantity = self.trade_engine.calculate_position_size(
-                        symbol,
-                        price,
-                        risk_percent=0.02
+                # Execute trade based on signal
+                if signal["action"] == "buy":
+                    # Calculate position size (1% of equity per trade)
+                    balance = self.trade_engine.get_account_balance()
+                    if balance is None:
+                        continue
+
+                    equity = balance["equity"]
+                    risk_amount = equity * 0.01  # 1% risk
+                    quantity = risk_amount / signal["price"]
+
+                    # Execute buy order
+                    self.trade_engine.execute_trade(
+                        symbol=symbol,
+                        side="buy",
+                        quantity=quantity,
+                        price=signal["price"]
                     )
 
-                    if quantity > 0:
+                elif signal["action"] == "sell":
+                    # Check if we have a position to sell
+                    position = self.trade_engine.get_position(symbol)
+                    if position is not None:
+                        # Sell entire position
                         self.trade_engine.execute_trade(
                             symbol=symbol,
-                            side=signal["action"],
-                            quantity=quantity,
-                            price=price
+                            side="sell",
+                            quantity=position["quantity"],
+                            price=signal["price"]
                         )
 
-            except Exception as e:
-                self.logger.error(f"Error analyzing {symbol}: {str(e)}")
-                continue
+        except Exception as e:
+            self.logger.error(f"Error analyzing symbols: {str(e)}")
 
     def _cleanup(self) -> None:
-        """Cleanup resources."""
-        # Cancel all open orders
+        """Cleanup resources before stopping."""
         try:
             if not self.test_mode:
+                # Cancel all open orders
                 self.api.cancel_all_orders()
+
+                # Close all positions if needed
+                positions = self.api.list_positions()
+                for position in positions:
+                    self.trade_engine.execute_trade(
+                        symbol=position.symbol,
+                        side="sell",
+                        quantity=float(position.qty)
+                    )
+
+            # Clear data cache
+            self.data_engine.clear_cache()
+
         except Exception as e:
-            self.logger.error(f"Error cleaning up: {str(e)}")
+            self.logger.error(f"Error during cleanup: {str(e)}")

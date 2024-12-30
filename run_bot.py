@@ -5,6 +5,7 @@ import sys
 import logging
 from dotenv import load_dotenv
 from trading.bots.crypto_bot import CryptoBot
+from trading.bots.stock_bot import StockBot
 
 def setup_logging():
     """Configure logging to show all levels."""
@@ -27,6 +28,7 @@ def main():
         parser = argparse.ArgumentParser(description='Run the trading bot')
         parser.add_argument('--single-run', action='store_true', help='Run a single analysis')
         parser.add_argument('--get-trades', action='store_true', help='Get recent trades')
+        parser.add_argument('--bot-type', choices=['crypto', 'stock'], default='crypto', help='Type of bot to run (crypto or stock)')
         args = parser.parse_args()
 
         # Get API credentials from environment variables
@@ -45,11 +47,12 @@ def main():
             print(json.dumps(error_response))
             sys.exit(1)
 
-        bot = CryptoBot(
+        # Create the appropriate bot based on type
+        BotClass = CryptoBot if args.bot_type == 'crypto' else StockBot
+        bot = BotClass(
             api_key=api_key,
             api_secret=api_secret,
-            base_url=base_url,
-            test_mode=True  # Always use test mode for safety
+            base_url=base_url
         )
 
         if args.get_trades:

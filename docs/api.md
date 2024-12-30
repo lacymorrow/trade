@@ -6,7 +6,11 @@
 
 1. **Single Analysis Run**
    ```bash
-   python run_bot.py --single-run
+   # Crypto bot
+   python run_bot.py --bot-type crypto --single-run
+
+   # Stock bot
+   python run_bot.py --bot-type stock --single-run
    ```
    - Performs one analysis cycle
    - Generates signals
@@ -15,7 +19,11 @@
 
 2. **Get Recent Trades**
    ```bash
-   python run_bot.py --get-trades
+   # Crypto bot
+   python run_bot.py --bot-type crypto --get-trades
+
+   # Stock bot
+   python run_bot.py --bot-type stock --get-trades
    ```
    - Fetches recent trades for all symbols
    - Returns JSON-formatted trade data
@@ -23,7 +31,11 @@
 
 3. **Continuous Trading**
    ```bash
-   python run_bot.py
+   # Crypto bot
+   python run_bot.py --bot-type crypto
+
+   # Stock bot
+   python run_bot.py --bot-type stock
    ```
    - Runs continuous trading loop
    - Monitors market data
@@ -75,9 +87,35 @@
 
 ## Core Classes
 
-### CryptoBot
+### Base Classes
 
-#### Methods
+1. **BaseBot**
+   - Abstract base class for all bots
+   - Manages bot lifecycle
+   - Implements trading loop
+   - Handles error recovery
+
+2. **DataEngine**
+   - Abstract base class for market data
+   - Defines data retrieval interface
+   - Implements caching
+   - Rate limit handling
+
+3. **SignalEngine**
+   - Abstract base class for signals
+   - Technical analysis framework
+   - Signal generation interface
+   - Indicator calculations
+
+4. **TradeEngine**
+   - Abstract base class for trading
+   - Order execution interface
+   - Position management
+   - Risk controls
+
+### Crypto Implementation
+
+#### CryptoBot
 
 1. **start()**
    - Starts the trading bot
@@ -90,13 +128,11 @@
    - Cancels open orders
 
 3. **get_trading_pairs()**
-   - Returns list of tradeable symbols
+   - Returns list of crypto pairs
    - Filters for active pairs
    - Returns: `List[str]`
 
-### CryptoDataEngine
-
-#### Methods
+#### CryptoDataEngine
 
 1. **get_price_data()**
    ```python
@@ -107,7 +143,7 @@
        limit: int = 100
    ) -> Optional[pd.DataFrame]
    ```
-   - Fetches historical price data
+   - Fetches crypto price data
    - Returns OHLCV DataFrame
    - Implements caching
 
@@ -119,69 +155,55 @@
        limit: int = 50
    ) -> Optional[pd.DataFrame]
    ```
-   - Fetches recent trades
+   - Fetches recent crypto trades
    - Returns trade DataFrame
    - Handles rate limiting
 
-### CryptoSignalEngine
+### Stock Implementation
 
-#### Methods
+#### StockBot
 
-1. **generate_signal()**
+1. **start()**
+   - Starts the trading bot
+   - Checks market hours
+   - Begins trading loop
+
+2. **stop()**
+   - Stops the trading bot
+   - Closes positions
+   - Cancels open orders
+
+3. **get_trading_pairs()**
+   - Returns list of stock symbols
+   - Filters for active, tradeable stocks
+   - Returns: `List[str]`
+
+#### StockDataEngine
+
+1. **get_price_data()**
    ```python
-   def generate_signal(
+   def get_price_data(
        self,
        symbol: str,
-       price_data: pd.DataFrame,
-       **kwargs
-   ) -> Optional[Dict[str, Any]]
+       timeframe: str = "1Min",
+       limit: int = 100
+   ) -> Optional[pd.DataFrame]
    ```
-   - Analyzes price data
-   - Generates trading signals
-   - Returns signal dictionary
+   - Fetches stock price data
+   - Returns OHLCV DataFrame
+   - Implements caching
 
-2. **calculate_signal_strength()**
+2. **get_recent_trades()**
    ```python
-   def calculate_signal_strength(
-       self,
-       indicators: Dict[str, Any],
-       **kwargs
-   ) -> float
-   ```
-   - Calculates signal strength
-   - Range: -1.0 to +1.0
-   - Returns strength value
-
-### CryptoTradeEngine
-
-#### Methods
-
-1. **execute_trade()**
-   ```python
-   def execute_trade(
+   def get_recent_trades(
        self,
        symbol: str,
-       side: str,
-       quantity: float,
-       price: Optional[float] = None,
-       order_type: str = "market",
-       **kwargs
-   ) -> Optional[Dict[str, Any]]
+       limit: int = 50
+   ) -> Optional[pd.DataFrame]
    ```
-   - Executes trading order
-   - Handles validation
-   - Returns order details
-
-2. **get_position()**
-   ```python
-   def get_position(
-       self,
-       symbol: str
-   ) -> Optional[Dict[str, Any]]
-   ```
-   - Gets current position
-   - Returns position details
-   - Handles missing positions
+   - Fetches recent stock trades
+   - Returns trade DataFrame
+   - Handles rate limiting
 
 ## Error Handling
 
@@ -211,19 +233,23 @@
    - Error processing data
    - Check data format
 
+4. **MARKET_CLOSED**
+   - Stock market is closed
+   - Only for stock trading
+
 ## Rate Limiting
 
 ### Alpaca API Limits
 
-1. **REST API**
+1. **Crypto API**
    - 200 requests per minute
-   - Implemented in CryptoDataEngine
-   - Automatic rate limiting
+   - Higher data frequency
+   - 24/7 trading
 
-2. **Data API**
-   - Higher limits for market data
-   - Cached responses
-   - Batch requests when possible
+2. **Stock API**
+   - 200 requests per minute
+   - Market hours only
+   - Trading halts respected
 
 ### Rate Limit Handling
 
@@ -260,9 +286,9 @@ def _rate_limit_wait(self):
    ```
 
 2. **Cache TTL**
-   - Default: 1 minute
+   - Crypto: 10 seconds
+   - Stocks: 1 minute
    - Configurable per instance
-   - Automatic expiration
 
 3. **Cache Methods**
    ```python

@@ -2,6 +2,11 @@
 
 A full-stack trading bot that combines technical analysis, sentiment analysis, and automated trading execution for both traditional stocks and cryptocurrencies.
 
+`python3 run_bot.py --bot-type stock --single-run`
+
+`python3 run_bot.py --bot-type crypto --single-run`
+
+
 ## Features
 
 - 🤖 Automated trading for stocks and cryptocurrencies
