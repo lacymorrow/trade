@@ -1,164 +1,135 @@
-# Trading Bot Architecture
+# Architecture
 
 ## System Overview
 
-The trading bot is a full-stack application that combines real-time market data analysis, sentiment analysis, and automated trading execution. It supports both traditional stock trading and cryptocurrency trading through a unified interface.
+The trading bot is built with a modular architecture consisting of four main components:
+
+1. **Base Bot** - Core trading logic and lifecycle management
+2. **Data Engine** - Market data retrieval and caching
+3. **Signal Engine** - Technical analysis and trading signal generation
+4. **Trade Engine** - Order execution and position management
 
 ```
 ┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
-│   Frontend UI   │────▶│   Backend API   │────▶│   Trading Core  │
+│   Data Engine   │────▶│  Signal Engine  │────▶│  Trade Engine   │
 └─────────────────┘     └─────────────────┘     └─────────────────┘
         │                       │                        │
         │                       │                        │
         ▼                       ▼                        ▼
 ┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
-│  User Controls  │     │  Data Analysis  │     │ Market Analysis │
+│  Market Data    │     │    Analysis     │     │    Position     │
+│   Retrieval     │     │   Generation    │     │   Management    │
 └─────────────────┘     └─────────────────┘     └─────────────────┘
 ```
 
-## Core Components
+## Component Design
 
-### 1. Trading Core (`trading/`)
-- **Bot Base Class**: Abstract implementation of trading logic
-- **Data Engine**: Market data fetching and processing
-- **Signal Engine**: Trading signal generation
-- **Trade Engine**: Order execution and management
+### Base Bot (`BaseBot`)
+- Manages bot lifecycle (start, stop, cleanup)
+- Handles error recovery and logging
+- Implements trading loop and timing
+- Abstract base class for specific implementations
 
-### 2. Frontend (`src/`)
-- **Next.js Application**: React-based user interface
-- **API Routes**: Backend endpoints for bot control
-- **UI Components**: Reusable interface elements
-- **State Management**: Real-time trading state
+### Data Engine (`CryptoDataEngine`)
+- Fetches real-time market data from Alpaca
+- Implements rate limiting and caching
+- Handles data normalization and validation
+- Supports multiple timeframes and symbols
 
-### 3. Analysis Engines
-- **Technical Analysis**: Price and volume indicators
-- **Sentiment Analysis**: Social media sentiment
-- **Safety Checks**: Trade validation rules
+### Signal Engine (`CryptoSignalEngine`)
+- Calculates technical indicators:
+  - RSI (Relative Strength Index)
+  - MACD (Moving Average Convergence Divergence)
+  - Volume analysis
+  - Volatility metrics
+- Generates trading signals with strength indicators
+- Implements risk-adjusted signal thresholds
+
+### Trade Engine (`CryptoTradeEngine`)
+- Executes trades through Alpaca API
+- Manages position sizing and risk limits
+- Handles order validation and error checking
+- Supports test mode for paper trading
 
 ## Data Flow
 
 1. **Market Data Flow**
-```
-Market APIs ──▶ Data Engine ──▶ Signal Engine ──▶ Trade Engine
-    │              │               │                │
-    └──────────────┴───────────────┴────────────────┘
-              Real-time Updates & Logging
-```
+   ```
+   Alpaca API → Data Engine → Signal Engine → Trade Decision
+   ```
 
-2. **Trading Flow**
-```
-User Input ──▶ API Routes ──▶ Bot Controller ──▶ Trade Execution
-    ▲              │               │                │
-    └──────────────┴───────────────┴────────────────┘
-              Status Updates & Notifications
-```
+2. **Signal Generation Flow**
+   ```
+   Price Data → Technical Indicators → Signal Strength → Trade Signal
+   ```
 
-## Key Features
+3. **Trade Execution Flow**
+   ```
+   Trade Signal → Position Sizing → Order Validation → Trade Execution
+   ```
 
-### 1. Multi-Asset Trading
-- Stock trading via Alpaca API
-- Cryptocurrency trading support
-- Unified trading interface
+## Implementation Details
 
-### 2. Analysis Capabilities
-- Technical indicator calculation
-- Social sentiment analysis
-- Volume analysis
-- Risk assessment
+### Core Classes
 
-### 3. Safety Features
-- Position size limits
-- Portfolio exposure limits
-- Market volatility checks
-- Sanity checks
+1. **CryptoBot**
+   - Inherits from `BaseBot`
+   - Initializes and coordinates all engines
+   - Manages trading parameters and symbols
+   - Implements crypto-specific trading logic
 
-## Directory Structure
+2. **CryptoDataEngine**
+   - Implements Alpaca's crypto API integration
+   - Handles websocket connections for real-time data
+   - Manages data caching and rate limiting
+   - Provides normalized price and trade data
 
-```
-project/
-├── src/                    # Frontend application
-│   ├── app/               # Next.js pages and API routes
-│   ├── components/        # React components
-│   ├── lib/              # Utility functions
-│   └── hooks/            # Custom React hooks
-├── trading/              # Trading core
-│   ├── core/            # Core trading components
-│   ├── bots/            # Bot implementations
-│   ├── analysis/        # Analysis engines
-│   └── utils/           # Utilities
-├── docs/                # Documentation
-├── tests/               # Test suites
-└── config/             # Configuration files
-```
+3. **CryptoSignalEngine**
+   - Implements crypto-specific signal generation
+   - Calculates technical indicators
+   - Generates weighted trading signals
+   - Adjusts for crypto market volatility
+
+4. **CryptoTradeEngine**
+   - Handles crypto order execution
+   - Manages position sizing and risk
+   - Implements paper trading in test mode
+   - Tracks trade performance and status
 
 ## Configuration
 
-### Environment Variables
-- API credentials
-- Trading parameters
-- Security settings
-- Feature flags
+The system is configured through multiple layers:
 
-### Trading Parameters
-- Position sizing
-- Risk limits
-- Technical indicators
-- Trading pairs
+1. **Environment Variables**
+   - API credentials
+   - Trading parameters
+   - Risk limits
 
-## Security Measures
+2. **Runtime Configuration**
+   - Trading pairs
+   - Timeframes
+   - Signal thresholds
 
-1. **API Security**
-- Secure credential storage
-- Rate limiting
-- Request validation
+3. **Engine-specific Configuration**
+   - Rate limits
+   - Cache settings
+   - Technical indicator parameters
 
-2. **Trading Safety**
-- Position limits
-- Loss prevention
-- Error handling
+## Error Handling
 
-3. **System Security**
-- Access control
-- Audit logging
-- Data encryption
+The system implements comprehensive error handling:
 
-## Deployment
+1. **Recovery Mechanisms**
+   - Automatic reconnection
+   - Rate limit management
+   - Error logging and reporting
 
-1. **Cloud Infrastructure**
-- Google Cloud Run
-- Container orchestration
-- Automated scaling
+2. **Validation Layers**
+   - Data validation
+   - Order validation
+   - Signal validation
 
-2. **Monitoring**
-- Performance metrics
-- Trading analytics
-- Error tracking
-
-## Development
-
-### Local Setup
-1. Install dependencies
-2. Configure environment
-3. Run development servers
-
-### Testing
-1. Unit tests
-2. Integration tests
-3. End-to-end tests
-
-## Future Improvements
-
-1. **Technical**
-- Advanced indicators
-- Machine learning models
-- Real-time analytics
-
-2. **Features**
-- Portfolio optimization
-- Risk management
-- Trading strategies
-
-3. **Infrastructure**
-- High availability
-- Disaster recovery
-- Performance optimization 
+3. **Fail-safes**
+   - Test mode trading
+   - Position limits
+   - Emergency shutdown 

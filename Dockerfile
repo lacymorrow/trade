@@ -1,17 +1,22 @@
-# Use Node.js base image
-FROM node:18-alpine AS builder
+# Use Node.js base image with specific version
+FROM node:18 AS builder
 
 # Set working directory
 WORKDIR /app
 
 # Install Python and dependencies
-RUN apk add --no-cache python3 py3-pip gcc musl-dev python3-dev ca-certificates openssl
+RUN apt-get update && apt-get install -y \
+	python3 \
+	python3-pip \
+	python3-venv \
+	build-essential \
+	python3-dev \
+	ca-certificates \
+	openssl \
+	&& rm -rf /var/lib/apt/lists/*
 
-# Update certificates and install certificates
-RUN apk add --no-cache ca-certificates && \
-	update-ca-certificates && \
-	apk add --no-cache openssl && \
-	apk add --no-cache python3-dev libffi-dev openssl-dev
+# Update certificates
+RUN update-ca-certificates
 
 # Install pnpm globally
 RUN npm install -g pnpm@latest
@@ -31,7 +36,7 @@ ENV PIP_CERT="/etc/ssl/certs/ca-certificates.crt"
 # Install dependencies
 RUN pnpm install --frozen-lockfile
 
-# Install Python dependencies with retry mechanism and SSL verification disabled (only for build)
+# Install Python dependencies with SSL verification disabled (only for build)
 RUN pip3 install --upgrade pip --trusted-host pypi.org --trusted-host files.pythonhosted.org && \
 	pip3 install wheel setuptools --trusted-host pypi.org --trusted-host files.pythonhosted.org && \
 	pip3 install -r requirements.txt --trusted-host pypi.org --trusted-host files.pythonhosted.org
@@ -43,15 +48,18 @@ COPY . .
 RUN pnpm build
 
 # Production image
-FROM node:18-alpine
+FROM node:18
 
 # Install Python and dependencies
-RUN apk add --no-cache python3 py3-pip ca-certificates openssl
+RUN apt-get update && apt-get install -y \
+	python3 \
+	python3-pip \
+	ca-certificates \
+	openssl \
+	&& rm -rf /var/lib/apt/lists/*
 
 # Update certificates
-RUN apk add --no-cache ca-certificates && \
-	update-ca-certificates && \
-	apk add --no-cache openssl
+RUN update-ca-certificates
 
 # Set shell for pnpm
 ENV SHELL=/bin/sh
@@ -90,8 +98,8 @@ ENV HOST=0.0.0.0
 ENV NEXT_TELEMETRY_DISABLED=1
 
 # Create non-root user
-RUN addgroup -g 1001 -S nodejs && \
-	adduser -S nextjs -u 1001 && \
+RUN groupadd -g 1001 nodejs && \
+	useradd -u 1001 -g nodejs -s /bin/bash -m nextjs && \
 	chown -R nextjs:nodejs /app && \
 	chmod -R 755 /app && \
 	mkdir -p /root/nltk_data && \

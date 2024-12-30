@@ -64,16 +64,20 @@ class CryptoDataEngine(DataEngine):
 
             self._rate_limit_wait()
 
-            # Get current time
+            # Get current time and format in RFC3339
             end = datetime.now()
             start = end - timedelta(minutes=limit)
+
+            # Format timestamps in RFC3339
+            start_str = start.strftime("%Y-%m-%dT%H:%M:%SZ")
+            end_str = end.strftime("%Y-%m-%dT%H:%M:%SZ")
 
             # Get bars with proper time range
             bars = self.api.get_crypto_bars(
                 symbol,
                 timeframe,
-                start=start.isoformat(),
-                end=end.isoformat()
+                start=start_str,
+                end=end_str
             ).df
 
             if not bars.empty:
@@ -246,40 +250,24 @@ class CryptoDataEngine(DataEngine):
                     trades_df = pd.DataFrame(trades_list)
                     trades_df.set_index('timestamp', inplace=True)
                     trades_df.sort_index(ascending=False, inplace=True)
+                    return trades_df
                 except Exception as e:
                     self.logger.error(f"Error creating DataFrame: {str(e)}")
                     return None
 
-                self.logger.info(f"Created DataFrame with shape: {trades_df.shape}")
-                self.logger.info(f"First few rows:\n{trades_df.head()}")
-
-                return trades_df
-
             except Exception as e:
-                self.logger.error(f"API call failed: {str(e)}")
-                self.logger.error(f"Error type: {type(e)}")
-                self.logger.error(f"Error args: {e.args}")
-                if isinstance(e, requests.exceptions.HTTPError):
-                    response = e.response
-                    self.logger.error(f"Response status code: {response.status_code}")
-                    self.logger.error(f"Response headers: {response.headers}")
-                    self.logger.error(f"Response text: {response.text}")
+                self.logger.error(f"Error in get_trades: {str(e)}")
                 return None
 
         except Exception as e:
-            self.logger.error(f"Error fetching recent trades for {symbol}: {str(e)}")
-            self.logger.error(f"Error type: {type(e)}")
-            self.logger.error(f"Error args: {e.args}")
-            if hasattr(e, '__dict__'):
-                self.logger.error(f"Error details: {e.__dict__}")
+            self.logger.error(f"Unexpected error in get_recent_trades: {str(e)}")
             return None
 
 class CryptoSignalEngine(SignalEngine):
     """Crypto market signal generation implementation."""
 
-    def __init__(self, data_engine: CryptoDataEngine):
+    def __init__(self):
         super().__init__()
-        self.data_engine = data_engine
 
     def generate_signal(
         self,
@@ -477,123 +465,108 @@ class CryptoBot(BaseBot):
         base_url: str,
         test_mode: bool = True
     ):
-        """Initialize crypto trading bot."""
-        super().__init__(test_mode)
+        """Initialize crypto bot."""
+        super().__init__(test_mode=test_mode)
 
-        # Initialize Alpaca API
+        # Initialize Alpaca API client
         self.api = tradeapi.REST(
             api_key,
             api_secret,
             base_url,
-            api_version="v2"
+            api_version='v2'
         )
 
-        # Initialize components
+        # Initialize engines
         self.data_engine = CryptoDataEngine(self.api)
-        self.signal_engine = CryptoSignalEngine(self.data_engine)
-        self.trade_engine = CryptoTradeEngine(self.api, test_mode)
+        self.signal_engine = CryptoSignalEngine()
+        self.trade_engine = CryptoTradeEngine(self.api, test_mode=test_mode)
 
-        # Default crypto pairs
-        self.default_symbols = ["BTC", "ETH", "SOL"]
+        # Trading parameters
+        self.symbols = []
+        self.timeframe = "1Min"
+        self.window = 20
 
     def _initialize(self) -> bool:
         """Initialize bot components."""
         try:
-            # Check API connection
-            self.api.get_account()
-
-            # Update trading symbols
+            # Update trading pairs
             self.update_symbols()
-
             return True
-
         except Exception as e:
-            self.logger.error(f"Crypto bot initialization failed: {str(e)}")
+            self.logger.error(f"Initialization error: {str(e)}")
             return False
 
     def _can_trade(self) -> bool:
-        """Check if crypto trading is possible."""
+        """Check if trading is currently possible."""
         try:
-            # Check account status
-            account = self.api.get_account()
-            if account.trading_blocked:
-                self.logger.error("Account is blocked from trading")
-                return False
-
-            if account.crypto_status != "ACTIVE":
-                self.logger.error("Crypto trading not active")
-                return False
-
+            # Check if market is open (crypto trades 24/7)
             return True
-
         except Exception as e:
-            self.logger.error(f"Error checking crypto trade status: {str(e)}")
+            self.logger.error(f"Error checking trading status: {str(e)}")
             return False
 
     def update_symbols(self) -> None:
-        """Update list of tradeable crypto symbols."""
+        """Update list of tradeable crypto pairs."""
         try:
-            # Get available crypto pairs
-            assets = self.api.list_assets(asset_class="crypto")
-            self.symbols = [
-                asset.symbol.replace("/USD", "") for asset in assets
-                if asset.tradable
-            ]
+            # Get list of active crypto assets
+            assets = self.api.list_assets(status='active', asset_class='crypto')
 
-            if not self.symbols:
-                self.logger.warning("No crypto pairs found, using defaults")
-                self.symbols = self.default_symbols
-
+            # Filter and format symbols
+            self.symbols = [asset.symbol for asset in assets if asset.tradable]
             self.logger.info(f"Updated crypto symbols: {len(self.symbols)} available")
 
         except Exception as e:
-            self.logger.error(f"Error updating crypto symbols: {str(e)}")
-            self.symbols = self.default_symbols
+            self.logger.error(f"Error updating symbols: {str(e)}")
 
     def analyze_symbols(self) -> None:
-        """Analyze crypto symbols for trading opportunities."""
+        """Analyze crypto pairs for trading opportunities."""
         for symbol in self.symbols:
             try:
-                # Get price data
-                price_data = self.data_engine.get_price_data(symbol)
-                if price_data is None:
-                    continue
+                # Get historical data
+                df = self.data_engine.get_price_data(
+                    symbol,
+                    timeframe=self.timeframe,
+                    limit=self.window
+                )
 
-                # Generate trading signal
-                signal = self.signal_engine.generate_signal(symbol, price_data)
-                if signal is None:
-                    continue
+                if df is not None and not df.empty:
+                    # Generate signal
+                    signal = self.signal_engine.generate_signal(symbol, df)
 
-                # Execute trade if signal is strong enough
-                if abs(signal["strength"]) >= 0.8:  # High conviction threshold
-                    price = signal["price"]
-                    quantity = self.trade_engine.calculate_position_size(
-                        symbol,
-                        price,
-                        risk_percent=0.01  # Lower risk for crypto
-                    )
-
-                    if quantity > 0:
-                        self.trade_engine.execute_trade(
-                            symbol=symbol,
-                            side=signal["action"],
-                            quantity=quantity,
-                            price=price
+                    # Execute trade if signal is generated
+                    if signal:
+                        # Calculate position size based on signal strength
+                        quantity = self.trade_engine.calculate_position_size(
+                            symbol,
+                            signal['price'],
+                            risk_percent=0.01  # Conservative risk for crypto
                         )
 
+                        if quantity > 0:
+                            self.trade_engine.execute_trade(
+                                symbol=symbol,
+                                side=signal['action'],
+                                quantity=quantity,
+                                price=signal['price']
+                            )
+
             except Exception as e:
-                self.logger.error(f"Error analyzing crypto {symbol}: {str(e)}")
+                self.logger.error(f"Error analyzing {symbol}: {str(e)}")
                 continue
 
     def _cleanup(self) -> None:
         """Cleanup resources."""
-        # Cancel all open orders
         try:
+            # Cancel all open orders
             if not self.test_mode:
                 self.api.cancel_all_orders()
-        except Exception as e:
-            self.logger.error(f"Error cleaning up crypto bot: {str(e)}")
 
-    def get_trading_pairs(self):
+            # Clear caches
+            self.data_engine.clear_cache()
+
+        except Exception as e:
+            self.logger.error(f"Error during cleanup: {str(e)}")
+
+    def get_trading_pairs(self) -> List[str]:
         """Get list of trading pairs."""
-        return ["BTC/USD", "ETH/USD", "SOL/USD"]  # Default trading pairs
+        return self.symbols

@@ -1,55 +1,31 @@
 steps:
-  - name: "gcr.io/cloud-builders/docker"
-    args: ["build", "-t", "gcr.io/$PROJECT_ID/trading-bot", "."]
+- name: 'gcr.io/cloud-builders/docker'
+args:
+- 'build'
+  - '-t'
+  - 'gcr.io/$PROJECT_ID/trade-app'
+  - '.'
 
-  - name: "gcr.io/cloud-builders/docker"
-    args: ["push", "gcr.io/$PROJECT_ID/trading-bot"]
+  - name: 'gcr.io/cloud-builders/docker'
+args:
+- 'push'
+  - 'gcr.io/$PROJECT_ID/trade-app'
 
-  - name: "gcr.io/google.com/cloudsdktool/cloud-sdk"
-    entrypoint: gcloud
-    args:
-      - "run"
-      - "deploy"
-      - "trading-bot"
-      - "--image"
-      - "gcr.io/$PROJECT_ID/trading-bot"
-      - "--region"
-      - "us-central1"
-      - "--platform"
-      - "managed"
-      - "--allow-unauthenticated"
-      - "--memory"
-      - "1Gi"
-      - "--timeout"
-      - "300s"
-      - "--set-env-vars"
-      - "ALPACA_API_KEY=${_ALPACA_API_KEY},ALPACA_SECRET_KEY=${_ALPACA_SECRET_KEY},ALPACA_BASE_URL=${_ALPACA_BASE_URL},TWITTER_API_KEY=${_TWITTER_API_KEY},TWITTER_API_SECRET=${_TWITTER_API_SECRET},TWITTER_ACCESS_TOKEN=${_TWITTER_ACCESS_TOKEN},TWITTER_ACCESS_TOKEN_SECRET=${_TWITTER_ACCESS_TOKEN_SECRET},STOCKTWITS_ACCESS_TOKEN=${_STOCKTWITS_ACCESS_TOKEN},ALPHA_VANTAGE_API_KEY=${_ALPHA_VANTAGE_API_KEY},CRON_SECRET=${_CRON_SECRET},UI_SECRET=${_UI_SECRET}"
-
-  - name: "gcr.io/google.com/cloudsdktool/cloud-sdk"
-    entrypoint: gcloud
-    args:
-      - "scheduler"
-      - "jobs"
-      - "create"
-      - "http"
-      - "trading-bot-cron"
-      - "--schedule"
-      - "*/30 9-16 * * 1-5"
-      - "--time-zone"
-      - "America/New_York"
-      - "--uri"
-      - "https://${_SERVICE_URL}/api/trading"
-      - "--http-method"
-      - "POST"
-      - "--headers"
-      - "Authorization=Bearer ${_CRON_SECRET}"
-      - "--attempt-deadline"
-      - "300s"
-      - "--location"
-      - "us-central1"
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+entrypoint: 'gcloud'
+args:
+- 'run'
+  - 'deploy'
+  - 'trade-app'
+  - '--image'
+  - 'gcr.io/$PROJECT_ID/trade-app'
+  - '--region'
+  - 'us-central1'
+  - '--platform'
+  - 'managed'
+  - '--allow-unauthenticated'
+  - '--set-env-vars'
+  - 'ALPACA_API_KEY=${_ALPACA_API_KEY},ALPACA_SECRET_KEY=${_ALPACA_SECRET_KEY},ALPACA_BASE_URL=${_ALPACA_BASE_URL}'
 
 images:
-  - "gcr.io/$PROJECT_ID/trading-bot"
-
-substitutions:
-  _SERVICE_URL: ""
+- 'gcr.io/$PROJECT_ID/trade-app'

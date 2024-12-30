@@ -1,283 +1,292 @@
-# Trading Bot Deployment Guide
+# Deployment Guide
 
-## Prerequisites
-1. Google Cloud CLI installed
-2. Project initialized (`gcloud init`)
-3. Required APIs enabled:
+## Overview
+
+The trading bot can be deployed in multiple environments:
+1. Local deployment for development and testing
+2. Cloud deployment for production use
+3. Container deployment for scalability
+
+## Local Deployment
+
+### Prerequisites
+
+1. **System Requirements**
+   - Python 3.8+
+   - pip package manager
+   - Git
+   - 2GB RAM minimum
+   - Stable internet connection
+
+2. **API Credentials**
+   - Alpaca trading account
+   - Paper trading API keys
+   - Live trading API keys (optional)
+
+### Setup Steps
+
+1. **Clone Repository**
    ```bash
-   gcloud services enable cloudbuild.googleapis.com run.googleapis.com cloudscheduler.googleapis.com
+   git clone <repository-url>
+   cd trade
    ```
 
-## Environment Variables
-Create a `.env` file with these variables (replace with your values):
-```bash
-ALPACA_API_KEY=your_api_key
-ALPACA_SECRET_KEY=your_secret_key
-ALPACA_BASE_URL=https://api.alpaca.markets
-TWITTER_API_KEY=your_twitter_key
-TWITTER_API_SECRET=your_twitter_secret
-TWITTER_ACCESS_TOKEN=your_twitter_token
-TWITTER_ACCESS_TOKEN_SECRET=your_twitter_token_secret
-STOCKTWITS_ACCESS_TOKEN=your_stocktwits_token
-ALPHA_VANTAGE_API_KEY=your_alpha_vantage_key
-CRON_SECRET=your_cron_secret
-UI_SECRET=your_ui_secret
-```
+2. **Create Python Environment**
+   ```bash
+   python -m venv venv
+   source venv/bin/activate  # Unix/macOS
+   venv\Scripts\activate     # Windows
+   ```
 
-## One-Command Deployment
-```bash
-gcloud builds submit \
-  --substitutions=_ALPACA_API_KEY="your_api_key",\
-_ALPACA_SECRET_KEY="your_secret_key",\
-_ALPACA_BASE_URL="https://api.alpaca.markets",\
-_TWITTER_API_KEY="your_twitter_key",\
-_TWITTER_API_SECRET="your_twitter_secret",\
-_TWITTER_ACCESS_TOKEN="your_twitter_token",\
-_TWITTER_ACCESS_TOKEN_SECRET="your_twitter_token_secret",\
-_STOCKTWITS_ACCESS_TOKEN="your_stocktwits_token",\
-_ALPHA_VANTAGE_API_KEY="your_alpha_vantage_key",\
-_CRON_SECRET="your_cron_secret",\
-_UI_SECRET="your_ui_secret" \
-  --region=us-central1
-```
+3. **Install Dependencies**
+   ```bash
+   pip install -r requirements.txt
+   ```
 
-## Required Files
+4. **Configure Environment**
+   ```bash
+   cp .env.example .env
+   # Edit .env with your credentials
+   ```
 
-### 1. Dockerfile
+### Running Locally
+
+1. **Test Mode**
+   ```bash
+   python run_bot.py --single-run
+   ```
+
+2. **Production Mode**
+   ```bash
+   python run_bot.py
+   ```
+
+## Cloud Deployment
+
+### Google Cloud Run
+
+1. **Prerequisites**
+   - Google Cloud account
+   - gcloud CLI installed
+   - Docker installed
+
+2. **Build Container**
+   ```bash
+   docker build -t gcr.io/$PROJECT_ID/trade-app .
+   ```
+
+3. **Push to Container Registry**
+   ```bash
+   docker push gcr.io/$PROJECT_ID/trade-app
+   ```
+
+4. **Deploy to Cloud Run**
+   ```bash
+   gcloud run deploy trade-app \
+     --image gcr.io/$PROJECT_ID/trade-app \
+     --platform managed \
+     --region us-central1 \
+     --allow-unauthenticated
+   ```
+
+### Environment Variables
+
+1. **Required Variables**
+   ```
+   ALPACA_API_KEY=your_key
+   ALPACA_SECRET_KEY=your_secret
+   ALPACA_BASE_URL=https://paper-api.alpaca.markets
+   ```
+
+2. **Optional Variables**
+   ```
+   LOG_LEVEL=INFO
+   ALPHA_VANTAGE_API_KEY=your_key
+   ```
+
+## Container Deployment
+
+### Dockerfile
+
 ```dockerfile
-# Use Node.js base image
-FROM node:18-alpine AS builder
+# Base image
+FROM python:3.9-slim
 
 # Set working directory
 WORKDIR /app
 
-# Install Python and dependencies
-RUN apk add --no-cache python3 py3-pip gcc musl-dev python3-dev ca-certificates openssl
-
-# Update certificates
-RUN update-ca-certificates
-
-# Install pnpm globally
-RUN npm install -g pnpm@latest
-
-# Copy package files
-COPY package*.json pnpm-lock.yaml ./
-COPY requirements.txt ./
-
-# Create and activate virtual environment
-RUN python3 -m venv /venv
-ENV PATH="/venv/bin:$PATH"
-ENV PYTHONPATH="/venv/lib/python3.12/site-packages"
-ENV SSL_CERT_FILE="/etc/ssl/certs/ca-certificates.crt"
-ENV REQUESTS_CA_BUNDLE="/etc/ssl/certs/ca-certificates.crt"
+# Copy requirements
+COPY requirements.txt .
 
 # Install dependencies
-RUN pnpm install --frozen-lockfile
-RUN pip3 install --no-cache-dir --trusted-host pypi.org --trusted-host files.pythonhosted.org pip setuptools wheel && \
-    pip3 install --no-cache-dir --trusted-host pypi.org --trusted-host files.pythonhosted.org -r requirements.txt
+RUN pip install -r requirements.txt
 
-# Copy source code
+# Copy application code
 COPY . .
 
-# Build Next.js app
-RUN pnpm build
-
-# Production image
-FROM node:18-alpine
-
-# Install Python and dependencies
-RUN apk add --no-cache python3 py3-pip ca-certificates openssl
-
-# Update certificates
-RUN update-ca-certificates
-
-# Set shell for pnpm
-ENV SHELL=/bin/sh
-
-# Install pnpm globally and ensure it's in PATH
-RUN npm install -g pnpm@latest
-ENV PNPM_HOME="/root/.local/share/pnpm"
-ENV PATH="${PNPM_HOME}:$PATH"
-
-WORKDIR /app
-
-# Copy virtual environment from builder
-COPY --from=builder /venv /venv
-ENV PATH="/venv/bin:$PATH"
-ENV PYTHONPATH="/venv/lib/python3.12/site-packages"
-ENV SSL_CERT_FILE="/etc/ssl/certs/ca-certificates.crt"
-ENV REQUESTS_CA_BUNDLE="/etc/ssl/certs/ca-certificates.crt"
-
-# Copy built assets from builder
-COPY --from=builder /app/.next ./.next
-COPY --from=builder /app/public ./public
-COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/package.json ./package.json
-COPY --from=builder /app/pnpm-lock.yaml ./pnpm-lock.yaml
-COPY --from=builder /app/run_bot.py ./run_bot.py
-COPY --from=builder /app/trading ./trading
-
-# Install NLTK data
-RUN python3 -c "import nltk; nltk.download('vader_lexicon'); nltk.download('punkt')"
-
 # Set environment variables
-ENV NODE_ENV=production
-ENV PORT=8080
-ENV HOST=0.0.0.0
-ENV NEXT_TELEMETRY_DISABLED=1
+ENV PYTHONUNBUFFERED=1
 
-# Create non-root user
-RUN addgroup -g 1001 -S nodejs && \
-    adduser -S nextjs -u 1001 && \
-    chown -R nextjs:nodejs /app && \
-    chmod -R 755 /app && \
-    mkdir -p /root/nltk_data && \
-    chown -R nextjs:nodejs /root/nltk_data && \
-    chmod -R 755 /root/nltk_data
-
-# Switch to non-root user
-USER nextjs
-
-# Expose port
-EXPOSE 8080
-
-# Start the application
-CMD ["pnpm", "next", "start", "-p", "8080", "-H", "0.0.0.0"]
+# Run the bot
+CMD ["python", "run_bot.py"]
 ```
 
-### 2. cloudbuild.yaml
-```yaml
-steps:
-  - name: 'gcr.io/cloud-builders/docker'
-    args: ['build', '-t', 'gcr.io/$PROJECT_ID/trading-bot', '.']
+### Docker Commands
 
-  - name: 'gcr.io/cloud-builders/docker'
-    args: ['push', 'gcr.io/$PROJECT_ID/trading-bot']
+1. **Build Image**
+   ```bash
+   docker build -t trade-bot .
+   ```
 
-  - name: 'gcr.io/cloud-builders/gcloud'
-    args:
-      - 'run'
-      - 'deploy'
-      - 'trading-bot'
-      - '--image'
-      - 'gcr.io/$PROJECT_ID/trading-bot'
-      - '--region'
-      - 'us-central1'
-      - '--platform'
-      - 'managed'
-      - '--allow-unauthenticated'
-      - '--set-env-vars'
-      - 'ALPACA_API_KEY=${_ALPACA_API_KEY},ALPACA_SECRET_KEY=${_ALPACA_SECRET_KEY},ALPACA_BASE_URL=${_ALPACA_BASE_URL},TWITTER_API_KEY=${_TWITTER_API_KEY},TWITTER_API_SECRET=${_TWITTER_API_SECRET},TWITTER_ACCESS_TOKEN=${_TWITTER_ACCESS_TOKEN},TWITTER_ACCESS_TOKEN_SECRET=${_TWITTER_ACCESS_TOKEN_SECRET},STOCKTWITS_ACCESS_TOKEN=${_STOCKTWITS_ACCESS_TOKEN},ALPHA_VANTAGE_API_KEY=${_ALPHA_VANTAGE_API_KEY},CRON_SECRET=${_CRON_SECRET},UI_SECRET=${_UI_SECRET}'
+2. **Run Container**
+   ```bash
+   docker run -d \
+     --name trade-bot \
+     --env-file .env \
+     trade-bot
+   ```
 
-images:
-  - 'gcr.io/$PROJECT_ID/trading-bot'
-```
+3. **View Logs**
+   ```bash
+   docker logs -f trade-bot
+   ```
 
-## Post-Deployment Verification
+## Monitoring
 
-### 1. Check service status
-```bash
-gcloud run services describe trading-bot --platform managed --region us-central1
-```
+### Logging
 
-### 2. View logs
-```bash
-gcloud logging read "resource.type=cloud_run_revision AND resource.labels.service_name=trading-bot" --limit 10
-```
+1. **Log Configuration**
+   ```python
+   logging.basicConfig(
+       level=logging.INFO,
+       format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+   )
+   ```
 
-### 3. Test the endpoint
-```bash
-curl -I https://trading-bot-[YOUR-PROJECT-ID].us-central1.run.app
-```
+2. **Log Files**
+   - Application logs
+   - Trade logs
+   - Error logs
 
-## Troubleshooting
+### Health Checks
 
-### 1. Build failures
-Check build logs:
-```bash
-gcloud builds log [BUILD_ID]
-```
+1. **API Connectivity**
+   - Regular API status checks
+   - Connection monitoring
+   - Rate limit tracking
 
-### 2. Container issues
-Check container logs:
-```bash
-gcloud logging read "resource.type=cloud_run_revision AND resource.labels.service_name=trading-bot" --limit 50
-```
+2. **Bot Status**
+   - Trading status
+   - Position monitoring
+   - Performance metrics
 
-### 3. Permission issues
-Ensure the service account has the necessary roles:
-```bash
-gcloud projects add-iam-policy-binding [PROJECT_ID] \
-    --member="serviceAccount:[SERVICE_ACCOUNT]" \
-    --role="roles/run.admin"
-```
+## Security
 
-## Security Notes
-1. Never commit `.env` files or sensitive credentials to version control
-2. Use Secret Manager for production deployments
-3. Regularly rotate API keys and secrets
-4. Monitor service usage and set up alerts for unusual activity
+### API Keys
 
-## Local Development
-1. Install dependencies:
-```bash
-pnpm install
-pip install -r requirements.txt
-```
+1. **Key Management**
+   - Use environment variables
+   - Never commit keys
+   - Rotate regularly
 
-2. Run the development server:
-```bash
-pnpm dev
-```
+2. **Access Control**
+   - Minimal permissions
+   - IP restrictions
+   - Rate limiting
 
-3. Test the trading bot:
-```bash
-python run_bot.py
-```
+### Data Security
 
-## Common Issues and Solutions
+1. **Storage**
+   - Secure credentials
+   - Encrypted data
+   - Regular backups
 
-### SSL Certificate Issues
-If you encounter SSL certificate errors:
-1. Ensure certificates are properly mounted in the container
-2. Verify SSL environment variables are set
-3. Check if the base image has updated certificates
-
-### Port Binding Issues
-If the container fails to start due to port issues:
-1. Verify PORT and HOST environment variables
-2. Check for port conflicts
-3. Ensure the container has proper permissions
-
-### Memory Issues
-If the container crashes due to memory:
-1. Adjust memory limits in Cloud Run configuration
-2. Optimize the application's memory usage
-3. Consider implementing memory monitoring
+2. **Transmission**
+   - HTTPS only
+   - Secure API endpoints
+   - Data validation
 
 ## Maintenance
 
-### Regular Updates
-1. Keep dependencies updated
-2. Monitor security advisories
-3. Test updates in staging before production
+### Updates
 
-### Monitoring
-1. Set up Cloud Monitoring
-2. Configure alerts for:
-   - Error rates
-   - Response times
-   - Memory usage
-   - CPU usage
+1. **Dependencies**
+   ```bash
+   pip install --upgrade -r requirements.txt
+   ```
+
+2. **Application Code**
+   ```bash
+   git pull origin main
+   ```
 
 ### Backup
-1. Regularly backup configuration
-2. Document all custom settings
-3. Maintain deployment history
 
-## Support
-For issues and support:
-1. Check Cloud Run logs
-2. Review application logs
-3. Consult Google Cloud documentation
-4. Open GitHub issues for bugs
+1. **Configuration**
+   - Environment variables
+   - Trading parameters
+   - API credentials
+
+2. **Data**
+   - Trading history
+   - Performance metrics
+   - Log files
+
+## Troubleshooting
+
+### Common Issues
+
+1. **Connection Problems**
+   - Check API credentials
+   - Verify network connectivity
+   - Monitor rate limits
+
+2. **Performance Issues**
+   - Check resource usage
+   - Monitor memory leaks
+   - Review log files
+
+### Recovery Steps
+
+1. **Bot Failure**
+   ```bash
+   # Stop bot
+   docker stop trade-bot
+
+   # Check logs
+   docker logs trade-bot
+
+   # Restart bot
+   docker start trade-bot
+   ```
+
+2. **Data Issues**
+   - Verify data integrity
+   - Check API responses
+   - Clear cache if needed
+
+## Scaling
+
+### Horizontal Scaling
+
+1. **Multiple Instances**
+   - Separate configurations
+   - Load balancing
+   - Data synchronization
+
+2. **Resource Allocation**
+   - CPU requirements
+   - Memory usage
+   - Network bandwidth
+
+### Performance Optimization
+
+1. **Caching**
+   - Market data
+   - API responses
+   - Trading signals
+
+2. **Resource Usage**
+   - Memory management
+   - CPU optimization
+   - Network efficiency

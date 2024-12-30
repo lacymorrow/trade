@@ -135,9 +135,12 @@ def main():
                 sys.exit(1)
 
         if args.single_run:
-            bot.run_single_analysis()
+            # Run for a single cycle then stop
+            bot.start()
+            bot.stop()
         else:
-            bot.run()
+            # Run continuously
+            bot.start()
 
     except Exception as e:
         error_response = {

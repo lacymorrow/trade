@@ -1,285 +1,272 @@
 # API Documentation
 
-## Trading Bot API
+## Command Line Interface
 
-### Bot Control Endpoints
+### Running the Bot
 
-#### Start Bot
-```http
-POST /api/bot/control/start
-```
+1. **Single Analysis Run**
+   ```bash
+   python run_bot.py --single-run
+   ```
+   - Performs one analysis cycle
+   - Generates signals
+   - Simulates trades in test mode
+   - Exits after completion
 
-**Description**: Start the trading bot with specified configuration.
+2. **Get Recent Trades**
+   ```bash
+   python run_bot.py --get-trades
+   ```
+   - Fetches recent trades for all symbols
+   - Returns JSON-formatted trade data
+   - Includes error handling and warnings
 
-**Request Body**:
+3. **Continuous Trading**
+   ```bash
+   python run_bot.py
+   ```
+   - Runs continuous trading loop
+   - Monitors market data
+   - Executes trades based on signals
+
+## Data Structures
+
+### Trade Object
 ```json
 {
-  "mode": "live|test",
-  "assets": ["BTC", "ETH", "SOL"],
-  "force_trade": false
+    "id": "2024-01-01T00:00:00Z-BTC/USD",
+    "timestamp": "2024-01-01T00:00:00Z",
+    "symbol": "BTC/USD",
+    "side": "buy",
+    "price": 42000.00,
+    "quantity": 0.1
 }
 ```
 
-**Response**:
+### Signal Object
 ```json
 {
-  "status": "success",
-  "message": "Bot started successfully",
-  "bot_id": "123"
+    "symbol": "BTC/USD",
+    "action": "buy",
+    "strength": 0.75,
+    "price": 42000.00,
+    "timestamp": "2024-01-01T00:00:00Z",
+    "indicators": {
+        "rsi": 65.5,
+        "macd": 100.5,
+        "macd_signal": 90.2,
+        "volume_ratio": 1.5,
+        "volatility": 0.02
+    }
 }
 ```
 
-#### Stop Bot
-```http
-POST /api/bot/control/stop
-```
-
-**Description**: Stop the currently running bot.
-
-**Response**:
+### Position Object
 ```json
 {
-  "status": "success",
-  "message": "Bot stopped successfully"
-}
-```
-
-#### Bot Status
-```http
-GET /api/bot/status
-```
-
-**Description**: Get current bot status and statistics.
-
-**Response**:
-```json
-{
-  "status": "running|stopped|error",
-  "uptime": "2h 15m",
-  "trades": 5,
-  "profit_loss": "+2.5%"
-}
-```
-
-### Trading Endpoints
-
-#### Execute Trade
-```http
-POST /api/bot/trade
-```
-
-**Description**: Execute a single trade analysis and potential trade.
-
-**Request Body**:
-```json
-{
-  "symbol": "BTC",
-  "force_trade": true
-}
-```
-
-**Response**:
-```json
-{
-  "status": "success",
-  "trade": {
-    "symbol": "BTC",
-    "action": "buy|sell",
+    "symbol": "BTC/USD",
     "quantity": 0.1,
-    "price": 35000
-  }
+    "entry_price": 42000.00,
+    "current_price": 42500.00,
+    "profit_loss": 50.00,
+    "profit_loss_percent": 1.19
 }
 ```
 
-#### Recent Trades
-```http
-GET /api/bot/trades
-```
+## Core Classes
 
-**Description**: Get list of recent trades.
+### CryptoBot
 
-**Query Parameters**:
-- `limit` (optional): Number of trades to return (default: 10)
-- `offset` (optional): Offset for pagination (default: 0)
+#### Methods
 
-**Response**:
-```json
-{
-  "trades": [
-    {
-      "id": "123",
-      "symbol": "BTC",
-      "side": "buy",
-      "quantity": 0.1,
-      "price": 35000,
-      "timestamp": "2024-11-29T22:18:58.535Z",
-      "profit_loss": "+2.5%"
-    }
-  ],
-  "total": 50
-}
-```
+1. **start()**
+   - Starts the trading bot
+   - Initializes components
+   - Begins trading loop
 
-### Analysis Endpoints
+2. **stop()**
+   - Stops the trading bot
+   - Cleans up resources
+   - Cancels open orders
 
-#### Market Analysis
-```http
-GET /api/analysis/market
-```
+3. **get_trading_pairs()**
+   - Returns list of tradeable symbols
+   - Filters for active pairs
+   - Returns: `List[str]`
 
-**Description**: Get current market analysis.
+### CryptoDataEngine
 
-**Query Parameters**:
-- `symbol` (required): Asset symbol to analyze
-- `timeframe` (optional): Analysis timeframe (default: "1h")
+#### Methods
 
-**Response**:
-```json
-{
-  "symbol": "BTC",
-  "price": 35000,
-  "indicators": {
-    "rsi": 65,
-    "macd": {
-      "value": 100,
-      "signal": 50
-    },
-    "volume": 1000000
-  },
-  "sentiment": {
-    "score": 0.8,
-    "activity": "high"
-  }
-}
-```
+1. **get_price_data()**
+   ```python
+   def get_price_data(
+       self,
+       symbol: str,
+       timeframe: str = "1Min",
+       limit: int = 100
+   ) -> Optional[pd.DataFrame]
+   ```
+   - Fetches historical price data
+   - Returns OHLCV DataFrame
+   - Implements caching
 
-#### Portfolio Analysis
-```http
-GET /api/analysis/portfolio
-```
+2. **get_recent_trades()**
+   ```python
+   def get_recent_trades(
+       self,
+       symbol: str,
+       limit: int = 50
+   ) -> Optional[pd.DataFrame]
+   ```
+   - Fetches recent trades
+   - Returns trade DataFrame
+   - Handles rate limiting
 
-**Description**: Get current portfolio analysis.
+### CryptoSignalEngine
 
-**Response**:
-```json
-{
-  "total_value": 100000,
-  "cash": 50000,
-  "positions": [
-    {
-      "symbol": "BTC",
-      "quantity": 0.1,
-      "value": 35000,
-      "profit_loss": "+2.5%"
-    }
-  ],
-  "exposure": "50%"
-}
-```
+#### Methods
 
-### Configuration Endpoints
+1. **generate_signal()**
+   ```python
+   def generate_signal(
+       self,
+       symbol: str,
+       price_data: pd.DataFrame,
+       **kwargs
+   ) -> Optional[Dict[str, Any]]
+   ```
+   - Analyzes price data
+   - Generates trading signals
+   - Returns signal dictionary
 
-#### Get Configuration
-```http
-GET /api/config
-```
+2. **calculate_signal_strength()**
+   ```python
+   def calculate_signal_strength(
+       self,
+       indicators: Dict[str, Any],
+       **kwargs
+   ) -> float
+   ```
+   - Calculates signal strength
+   - Range: -1.0 to +1.0
+   - Returns strength value
 
-**Description**: Get current bot configuration.
+### CryptoTradeEngine
 
-**Response**:
-```json
-{
-  "mode": "live",
-  "assets": ["BTC", "ETH", "SOL"],
-  "parameters": {
-    "max_position_size": 0.1,
-    "stop_loss": 0.02,
-    "take_profit": 0.05
-  }
-}
-```
+#### Methods
 
-#### Update Configuration
-```http
-PUT /api/config
-```
+1. **execute_trade()**
+   ```python
+   def execute_trade(
+       self,
+       symbol: str,
+       side: str,
+       quantity: float,
+       price: Optional[float] = None,
+       order_type: str = "market",
+       **kwargs
+   ) -> Optional[Dict[str, Any]]
+   ```
+   - Executes trading order
+   - Handles validation
+   - Returns order details
 
-**Description**: Update bot configuration.
-
-**Request Body**:
-```json
-{
-  "mode": "test",
-  "assets": ["BTC", "ETH"],
-  "parameters": {
-    "max_position_size": 0.05
-  }
-}
-```
-
-**Response**:
-```json
-{
-  "status": "success",
-  "message": "Configuration updated"
-}
-```
+2. **get_position()**
+   ```python
+   def get_position(
+       self,
+       symbol: str
+   ) -> Optional[Dict[str, Any]]
+   ```
+   - Gets current position
+   - Returns position details
+   - Handles missing positions
 
 ## Error Handling
 
-All endpoints return standard error responses:
-
+### Error Response Format
 ```json
 {
-  "status": "error",
-  "code": "ERROR_CODE",
-  "message": "Error description"
+    "success": false,
+    "error": {
+        "code": "ERROR_CODE",
+        "message": "Error description",
+        "details": "Additional error details"
+    }
 }
 ```
 
-Common error codes:
-- `UNAUTHORIZED`: Authentication required
-- `INVALID_REQUEST`: Invalid request parameters
-- `BOT_ERROR`: Trading bot error
-- `MARKET_ERROR`: Market-related error
-- `CONFIG_ERROR`: Configuration error
+### Common Error Codes
+
+1. **MISSING_CREDENTIALS**
+   - Missing API credentials
+   - Check environment variables
+
+2. **FETCH_ERROR**
+   - Error fetching data
+   - Check API connection
+
+3. **SERIALIZATION_ERROR**
+   - Error processing data
+   - Check data format
 
 ## Rate Limiting
 
-- API requests are limited to 100 requests per minute per IP
-- Trading endpoints are limited to 10 requests per minute per IP
-- Status endpoints are limited to 60 requests per minute per IP
+### Alpaca API Limits
 
-## Authentication
+1. **REST API**
+   - 200 requests per minute
+   - Implemented in CryptoDataEngine
+   - Automatic rate limiting
 
-All endpoints require authentication using an API key:
+2. **Data API**
+   - Higher limits for market data
+   - Cached responses
+   - Batch requests when possible
 
-```http
-Authorization: Bearer YOUR_API_KEY
+### Rate Limit Handling
+
+```python
+def _rate_limit_wait(self):
+    """Handle rate limiting."""
+    self._request_count += 1
+    now = datetime.now()
+
+    if (now - self._last_request_time).seconds >= 60:
+        self._request_count = 1
+        self._last_request_time = now
+        return
+
+    if self._request_count >= self._rate_limit:
+        sleep_time = 60 - (now - self._last_request_time).seconds
+        if sleep_time > 0:
+            time.sleep(sleep_time)
+        self._request_count = 1
+        self._last_request_time = datetime.now()
 ```
 
-## WebSocket API
+## Data Caching
 
-### Real-time Updates
-```websocket
-ws://api/websocket
-```
+### Cache Implementation
 
-**Subscribe to Updates**:
-```json
-{
-  "action": "subscribe",
-  "channels": ["trades", "portfolio", "status"]
-}
-```
+1. **Cache Keys**
+   ```python
+   cache_key = self._build_cache_key(
+       symbol,
+       timeframe=timeframe,
+       limit=limit
+   )
+   ```
 
-**Message Format**:
-```json
-{
-  "type": "trade|portfolio|status",
-  "data": {
-    // Channel-specific data
-  },
-  "timestamp": "2024-11-29T22:18:58.535Z"
-}
-``` 
+2. **Cache TTL**
+   - Default: 1 minute
+   - Configurable per instance
+   - Automatic expiration
+
+3. **Cache Methods**
+   ```python
+   def _cache_data(self, key: str, data: Any) -> None
+   def _get_cached_data(self, key: str) -> Optional[Any]
+   def clear_cache(self) -> None
+   ``` 
