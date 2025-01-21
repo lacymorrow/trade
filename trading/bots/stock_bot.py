@@ -231,7 +231,7 @@ class StockTradeEngine(TradeEngine):
                 qty=quantity,
                 side=side,
                 type=order_type,
-                time_in_force="gtc",
+                time_in_force="day",
                 limit_price=price if order_type == "limit" else None
             )
 

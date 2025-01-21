@@ -1,41 +1,44 @@
-import { spawn } from 'child_process';
 import { NextResponse } from 'next/server';
 
 export async function GET() {
-    try {
-        // Run the Python script to get recent trades
-        const result = await new Promise((resolve, reject) => {
-            const process = spawn('python3', ['run_bot.py', '--get-trades']);
+	try {
+		console.log('Fetching trades from:', process.env.NEXT_PUBLIC_BACKEND_URL);
 
-            let output = '';
-            let error = '';
+		const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/trades`, {
+			headers: {
+				'Content-Type': 'application/json',
+				'Authorization': `Bearer ${process.env.UI_SECRET || 'development-secret'}`
+			}
+		});
 
-            process.stdout.on('data', (data) => {
-                output += data.toString();
-            });
+		if (!response.ok) {
+			console.error('Error response from backend:', {
+				status: response.status,
+				statusText: response.statusText
+			});
+			const errorText = await response.text();
+			console.error('Error details:', errorText);
 
-            process.stderr.on('data', (data) => {
-                error += data.toString();
-            });
+			throw new Error(`Backend error: ${response.status} ${response.statusText}`);
+		}
 
-            process.on('close', (code) => {
-                if (code !== 0) {
-                    reject(new Error(`Process exited with code ${code}\nError: ${error}`));
-                } else {
-                    try {
-                        resolve(JSON.parse(output));
-                    } catch {
-                        reject(new Error('Failed to parse trades data'));
-                    }
-                }
-            });
-        });
+		const data = await response.json();
+		console.log('Trades data received:', data);
 
-        return NextResponse.json(result);
-    } catch (error) {
-        console.error('Error fetching trades:', error);
-        return NextResponse.json({
-            error: error instanceof Error ? error.message : 'Failed to fetch trades'
-        }, { status: 500 });
-    }
+		if (!data.success) {
+			throw new Error(data.error?.message || 'Failed to fetch trades from backend');
+		}
+
+		return NextResponse.json(data);
+	} catch (error) {
+		console.error('Error fetching trades:', error);
+		return NextResponse.json({
+			success: false,
+			error: {
+				code: 'FETCH_ERROR',
+				message: error instanceof Error ? error.message : 'Failed to fetch trades',
+				details: error instanceof Error ? error.stack : undefined
+			}
+		}, { status: 500 });
+	}
 }

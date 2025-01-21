@@ -2,10 +2,25 @@
 
 A full-stack trading bot that combines technical analysis, sentiment analysis, and automated trading execution for both traditional stocks and cryptocurrencies.
 
+## Useful commands
+
+### Run bot
+
 `python3 run_bot.py --bot-type stock --single-run`
 
 `python3 run_bot.py --bot-type crypto --single-run`
 
+### Check status of deployments
+
+`gcloud run services list --platform managed | cat`
+
+`gcloud logging read "resource.type=cloud_run_revision AND resource.labels.service_name=trading-bot" --limit 50`
+
+`gcloud builds submit --tag gcr.io/$(gcloud config get-value project)/trading-bot`
+
+`gcloud run deploy trading-bot --image gcr.io/$(gcloud config get-value project)/trading-bot --platform managed --region us-central1 --allow-unauthenticated`
+
+`gcloud run deploy trade-app --image gcr.io/lacy-morrow/trade-app --region us-central1 --platform managed --allow-unauthenticated --set-env-vars="ALPACA_API_KEY=asdf,ALPACA_SECRET_KEY=asdf,ALPACA_BASE_URL=<https://api.alpaca.markets>"`
 
 ## Features
 

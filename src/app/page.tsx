@@ -13,7 +13,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "@/hooks/use-toast";
 import { AlertCircle, CheckCircle2, PlayCircle } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import RecentTrades from "./components/RecentTrades";
 
 export default function Home() {
@@ -21,41 +21,112 @@ export default function Home() {
   const [lastRun, setLastRun] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
+  const checkBotStatus = async () => {
+    try {
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_BACKEND_URL}/status`,
+        {
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: "Bearer development-secret",
+          },
+        }
+      );
+      const data = await response.json();
+
+      if (response.ok) {
+        setBotStatus(data.status);
+      }
+    } catch (error) {
+      console.error("Error checking bot status:", error);
+    }
+  };
+
+  // Check status on component mount and every 30 seconds
+  useEffect(() => {
+    checkBotStatus();
+    const interval = setInterval(checkBotStatus, 30000);
+    return () => clearInterval(interval);
+  }, []);
+
   const handleRunBot = async () => {
     try {
       setIsLoading(true);
-      setBotStatus("running");
 
-      const response = await fetch("/api/trading", {
-        method: "POST",
-        headers: {
-          Authorization: "Bearer development-secret",
-          "Content-Type": "application/json",
-        },
-      });
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_BACKEND_URL}/analyze`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: "Bearer development-secret",
+          },
+        }
+      );
 
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.error || "Failed to run trading bot");
+        throw new Error(data.error?.message || "Failed to run analysis");
       }
 
       setLastRun(new Date().toLocaleString());
       toast({
         title: "Success",
-        description: "Trading bot analysis completed successfully",
+        description: "Analysis completed successfully",
       });
+
+      // Check actual bot status after analysis
+      await checkBotStatus();
     } catch (error) {
-      console.error("Error running bot:", error);
+      console.error("Error running analysis:", error);
       toast({
         variant: "destructive",
         title: "Error",
         description:
-          error instanceof Error ? error.message : "Failed to run trading bot",
+          error instanceof Error ? error.message : "Failed to run analysis",
       });
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleStopBot = async () => {
+    try {
+      setIsLoading(true);
+
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_BACKEND_URL}/stop`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: "Bearer development-secret",
+          },
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to stop trading bot");
+      }
+
       setBotStatus("stopped");
+      toast({
+        title: "Success",
+        description: "Trading bot stopped successfully",
+      });
+    } catch (error) {
+      console.error("Error stopping bot:", error);
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description:
+          error instanceof Error ? error.message : "Failed to stop trading bot",
+      });
+    } finally {
+      setIsLoading(false);
     }
   };
 

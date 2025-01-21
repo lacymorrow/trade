@@ -7,6 +7,7 @@ from crypto_config import (
     ALPACA_CONFIG, TRADING_PAIRS,
     TIMEFRAMES, DEFAULT_TIMEFRAME
 )
+import requests
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -54,31 +55,53 @@ class CryptoDataEngine:
     def get_ohlcv(self, symbol, timeframe=DEFAULT_TIMEFRAME, limit=100):
         """Get OHLCV data for a symbol."""
         try:
-            symbol = symbol.replace('/', '')  # Convert BTC/USD to BTCUSD
+            # Calculate time window
             end = datetime.now()
             start = end - timedelta(days=limit if timeframe == '1D' else 10)
 
-            bars = self.api.get_crypto_bars(
-                symbol,
-                timeframe,
-                start=start.isoformat(),
-                end=end.isoformat(),
-                exchange='CBSE'
-            ).df
+            # Use v1beta3 endpoint directly
+            url = 'https://data.alpaca.markets/v1beta3/crypto/us/bars'
+            headers = {
+                'APCA-API-KEY-ID': ALPACA_CONFIG['API_KEY'],
+                'APCA-API-SECRET-KEY': ALPACA_CONFIG['SECRET_KEY']
+            }
+            params = {
+                'symbols': [symbol],  # API expects array of symbols
+                'timeframe': timeframe,
+                'start': start.isoformat(),
+                'end': end.isoformat()
+            }
 
-            if bars.empty:
+            response = requests.get(url, headers=headers, params=params)
+            if response.status_code != 200:
+                logger.error(f"API Error - Status: {response.status_code}, Response: {response.text}")
                 return None
 
-            # Convert to standard format
-            df = pd.DataFrame({
-                'timestamp': bars.index,
-                'open': bars['open'],
-                'high': bars['high'],
-                'low': bars['low'],
-                'close': bars['close'],
-                'volume': bars['volume']
-            })
+            data = response.json()
+            if not data or 'bars' not in data:
+                logger.info(f"No data returned from API for {symbol}")
+                return None
+
+            # Convert bars to DataFrame
+            bars = data['bars'].get(symbol, [])
+            if not bars:
+                logger.info(f"No price data available for {symbol}")
+                return None
+
+            df_data = []
+            for bar in bars:
+                df_data.append({
+                    'timestamp': pd.Timestamp(bar['t']),
+                    'open': float(bar['o']),
+                    'high': float(bar['h']),
+                    'low': float(bar['l']),
+                    'close': float(bar['c']),
+                    'volume': float(bar['v'])
+                })
+
+            df = pd.DataFrame(df_data)
             df.set_index('timestamp', inplace=True)
+            df = df.sort_index()
 
             return df.tail(limit)
 

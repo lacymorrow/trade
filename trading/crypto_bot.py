@@ -135,14 +135,14 @@ class CryptoBot:
 
             self.logger.info(f"{symbol}: Requesting data from {start} to {end}")
 
-            # Get bars from Alpaca Crypto API using v2 endpoint
-            url = 'https://data.alpaca.markets/v1beta3/crypto/us/bars'  # Use v1beta3 crypto endpoint
+            # Get bars from Alpaca Crypto API using v1beta3 endpoint
+            url = 'https://data.alpaca.markets/v1beta3/crypto/us/bars'
             headers = {
                 'APCA-API-KEY-ID': ALPACA_CONFIG['API_KEY'],
                 'APCA-API-SECRET-KEY': ALPACA_CONFIG['SECRET_KEY']
             }
             params = {
-                'symbols': symbol,  # API expects BTC/USD format
+                'symbols': [symbol],  # API expects array of symbols
                 'timeframe': '1H',  # Use correct timeframe format
                 'start': start.isoformat(),
                 'end': end.isoformat()
@@ -162,7 +162,7 @@ class CryptoBot:
                 return None
 
             # Convert bars to DataFrame
-            bars = data['bars'].get(symbol, [])  # Use original symbol format
+            bars = data['bars'].get(symbol, [])  # Get bars for the symbol
             if not bars:
                 self.logger.info(f"{symbol}: ❌ No price data available")
                 return None

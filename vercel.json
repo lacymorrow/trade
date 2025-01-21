@@ -2,25 +2,53 @@
   "crons": [
     {
       "path": "/api/trading",
-      "schedule": "*/30 9-16 * * 1-5"
+      "schedule": "0 9 * * 1-5"
     }
   ],
   "functions": {
     "src/app/api/trading/route.ts": {
       "memory": 1024,
-      "maxDuration": 300
+      "maxDuration": 60
     }
   },
   "env": {
-    "ALPACA_API_KEY": "@alpaca_api_key",
-    "ALPACA_SECRET_KEY": "@alpaca_secret_key",
-    "ALPACA_BASE_URL": "@alpaca_base_url",
-    "TWITTER_API_KEY": "@twitter_api_key",
-    "TWITTER_API_SECRET": "@twitter_api_secret",
-    "TWITTER_ACCESS_TOKEN": "@twitter_access_token",
-    "TWITTER_ACCESS_TOKEN_SECRET": "@twitter_access_token_secret",
-    "STOCKTWITS_ACCESS_TOKEN": "@stocktwits_access_token",
-    "ALPHA_VANTAGE_API_KEY": "@alpha_vantage_api_key",
-    "CRON_SECRET": "@cron_secret"
-  }
+    "ALPACA_API_KEY": "AKGUEMUAJ5YNUBJ1RI1B",
+    "ALPACA_SECRET_KEY": "bCK6QwP40XrOSn33qtEsSz0ZzqzcFESoVVdnpg1W",
+    "ALPACA_BASE_URL": "https://api.alpaca.markets",
+    "TWITTER_API_KEY": "pSYI8z0PRzvx1gL0zNXmC292l",
+    "TWITTER_API_SECRET": "2xth6Z2lnyIWUMJCWv4nxADNyJuOI6ZHrGZupBYvp0YQmjj3u7",
+    "TWITTER_ACCESS_TOKEN": "12008432-WwozNXHUqmNLntCwwbRKYTExQPh6vYkLCVl8tTaqq",
+    "TWITTER_ACCESS_TOKEN_SECRET": "sHAQxQEmMOyfnGC5TM5sy7gVoEVbGkBHBAMIpYKGPpluR",
+    "STOCKTWITS_ACCESS_TOKEN": "3adc1f34d56a9e97f353fe98b451131e9a7e9412",
+    "ALPHA_VANTAGE_API_KEY": "QNSRZIG3YBD4K0FU",
+    "CRON_SECRET": "test_secret",
+    "UI_SECRET": "development-secret",
+    "NEXT_PUBLIC_BACKEND_URL": "https://trade-bot-193615402367.us-west1.run.app",
+    "NEXT_PUBLIC_UI_SECRET": "development-secret"
+  },
+  "rewrites": [
+    {
+      "source": "/((?!api|_next/static|_next/image|favicon.ico|public).*)",
+      "destination": "/index.html"
+    }
+  ],
+  "headers": [
+    {
+      "source": "/api/(.*)",
+      "headers": [
+        {
+          "key": "Access-Control-Allow-Origin",
+          "value": "*"
+        },
+        {
+          "key": "Access-Control-Allow-Methods",
+          "value": "GET, POST, PUT, DELETE, OPTIONS"
+        },
+        {
+          "key": "Access-Control-Allow-Headers",
+          "value": "X-Requested-With, Content-Type, Authorization"
+        }
+      ]
+    }
+  ]
 }

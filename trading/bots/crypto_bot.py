@@ -72,27 +72,100 @@ class CryptoDataEngine(DataEngine):
             start_str = start.strftime("%Y-%m-%dT%H:%M:%SZ")
             end_str = end.strftime("%Y-%m-%dT%H:%M:%SZ")
 
-            # Get bars with proper time range
-            bars = self.api.get_crypto_bars(
-                symbol,
-                timeframe,
-                start=start_str,
-                end=end_str
-            ).df
+            # Build URL for crypto bars (v1beta3 endpoint)
+            base_url = "https://data.alpaca.markets/v1beta3"
+            bars_url = f"{base_url}/crypto/us/bars"
 
-            if not bars.empty:
-                # Ensure we have the right columns
-                required_columns = ['open', 'high', 'low', 'close', 'volume']
-                if all(col in bars.columns for col in required_columns):
-                    self._cache_data(cache_key, bars)
-                    return bars
-                else:
-                    self.logger.error(f"Missing required columns in data for {symbol}")
+            # Add API key to headers
+            headers = {
+                'APCA-API-KEY-ID': self.api._key_id,
+                'APCA-API-SECRET-KEY': self.api._secret_key
+            }
+
+            # Get bars
+            params = {
+                'symbols': [symbol],  # Pass as array
+                'start': start_str,
+                'end': end_str,
+                'timeframe': timeframe,
+                'limit': limit
+            }
+
+            self.logger.info(f"Request URL: {bars_url}")
+            self.logger.info(f"Request params: {params}")
+
+            # Make API request with timeout
+            try:
+                response = self.api._session.get(bars_url, headers=headers, params=params, timeout=10)
+                response.raise_for_status()
+            except requests.exceptions.Timeout:
+                self.logger.error("API request timed out")
+                return None
+            except requests.exceptions.RequestException as e:
+                self.logger.error(f"API request failed: {str(e)}")
+                return None
+
+            # Parse JSON response
+            try:
+                bars_data = response.json()
+            except json.JSONDecodeError as e:
+                self.logger.error(f"Failed to parse JSON response: {str(e)}")
+                return None
+
+            self.logger.info(f"API Response type: {type(bars_data)}")
+            self.logger.info(f"API Response keys: {bars_data.keys() if isinstance(bars_data, dict) else 'N/A'}")
+
+            # Validate response structure
+            if not isinstance(bars_data, dict):
+                self.logger.error(f"Invalid response type: {type(bars_data)}")
+                return None
+
+            if 'bars' not in bars_data:
+                self.logger.warning(f"No bars data in response for {symbol}")
+                return None
+
+            if symbol not in bars_data['bars']:
+                self.logger.warning(f"No bars found for {symbol}")
+                return None
+
+            # Convert bars to DataFrame
+            bars_list = []
+            for bar in bars_data['bars'][symbol]:
+                if not isinstance(bar, dict):
+                    self.logger.warning(f"Invalid bar data type: {type(bar)}")
+                    continue
+
+                try:
+                    bars_list.append({
+                        'timestamp': pd.Timestamp(bar['t']),
+                        'open': float(bar['o']),
+                        'high': float(bar['h']),
+                        'low': float(bar['l']),
+                        'close': float(bar['c']),
+                        'volume': float(bar['v'])
+                    })
+                except (KeyError, ValueError, TypeError) as e:
+                    self.logger.warning(f"Error processing bar: {str(e)}")
+                    continue
+
+            if not bars_list:
+                self.logger.warning(f"No valid bars found for {symbol}")
+                return None
+
+            # Create DataFrame
+            try:
+                df = pd.DataFrame(bars_list)
+                df.set_index('timestamp', inplace=True)
+                df.sort_index(ascending=True, inplace=True)
+                self._cache_data(cache_key, df)
+                return df
+            except Exception as e:
+                self.logger.error(f"Error creating DataFrame: {str(e)}")
+                return None
 
         except Exception as e:
             self.logger.error(f"Error fetching crypto price data for {symbol}: {str(e)}")
-
-        return None
+            return None
 
     def get_current_price(self, symbol: str) -> Optional[float]:
         """Get current crypto price."""
@@ -383,7 +456,7 @@ class CryptoTradeEngine(TradeEngine):
                 qty=quantity,
                 side=side,
                 type=order_type,
-                time_in_force="gtc",
+                time_in_force='day',
                 limit_price=price if order_type == "limit" else None
             )
 
@@ -520,9 +593,15 @@ class CryptoBot(BaseBot):
 
     def analyze_symbols(self) -> None:
         """Analyze crypto pairs for trading opportunities."""
+        self.logger.info("Starting analysis of crypto pairs...")
+        self.logger.info(f"Total symbols to analyze: {len(self.symbols)}")
+
         for symbol in self.symbols:
             try:
+                self.logger.info(f"\nAnalyzing {symbol}...")
+
                 # Get historical data
+                self.logger.info(f"{symbol}: Fetching historical data...")
                 df = self.data_engine.get_price_data(
                     symbol,
                     timeframe=self.timeframe,
@@ -530,12 +609,17 @@ class CryptoBot(BaseBot):
                 )
 
                 if df is not None and not df.empty:
+                    self.logger.info(f"{symbol}: Got {len(df)} price data points")
+
                     # Generate signal
+                    self.logger.info(f"{symbol}: Generating trading signal...")
                     signal = self.signal_engine.generate_signal(symbol, df)
 
-                    # Execute trade if signal is generated
                     if signal:
+                        self.logger.info(f"{symbol}: Signal generated - {signal['action']} (strength: {signal.get('strength', 'N/A')})")
+
                         # Calculate position size based on signal strength
+                        self.logger.info(f"{symbol}: Calculating position size...")
                         quantity = self.trade_engine.calculate_position_size(
                             symbol,
                             signal['price'],
@@ -543,16 +627,25 @@ class CryptoBot(BaseBot):
                         )
 
                         if quantity > 0:
+                            self.logger.info(f"{symbol}: Executing trade - {signal['action']} {quantity} units at {signal['price']}")
                             self.trade_engine.execute_trade(
                                 symbol=symbol,
                                 side=signal['action'],
                                 quantity=quantity,
                                 price=signal['price']
                             )
+                        else:
+                            self.logger.info(f"{symbol}: Skipping trade - quantity too small")
+                    else:
+                        self.logger.info(f"{symbol}: No trading signal generated")
+                else:
+                    self.logger.info(f"{symbol}: No price data available, skipping")
 
             except Exception as e:
                 self.logger.error(f"Error analyzing {symbol}: {str(e)}")
                 continue
+
+        self.logger.info("\nAnalysis cycle complete.")
 
     def _cleanup(self) -> None:
         """Cleanup resources."""

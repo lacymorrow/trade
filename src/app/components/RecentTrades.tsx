@@ -115,7 +115,7 @@ export default function RecentTrades() {
             </TableRow>
           ) : (
             trades.map((trade) => (
-              <TableRow key={trade.id}>
+              <TableRow key={`${trade.timestamp}-${trade.symbol}-${trade.id}`}>
                 <TableCell>{trade.timestamp}</TableCell>
                 <TableCell>{trade.symbol}</TableCell>
                 <TableCell>
